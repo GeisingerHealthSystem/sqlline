@@ -5,29 +5,38 @@
 #
 # NOTE: For Hive functionality, you will need the Simba Hive JDBC drivers
 # This can be installed/built from the rpm GitHub repo -> simba-hive-jdbc
+# If you need RPM deps: https://www.mojohaus.org/rpm-maven-plugin/adv-params.html#Dependency
 # REQUIRES: maven > 3.2.1
 
 CURRENT_USER = $(shell echo $whoami)
 # Now packaged as simba-hive-jdbc in Artifactory
 #SIMBA_DRIVERS = "https://public-repo-1.hortonworks.com/HDP/hive-jdbc4/2.6.2.1002/SimbaHiveJDBC41-2.6.2.1002.zip"
 SQLLINE_VER = $(shell mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-MAVEN_DL = "http://www.trieuvan.com/apache/maven/maven-3/3.6.0/binaries/apache-maven-3.6.0-bin.tar.gz"
+MAVEN_DL = "http://mirrors.advancedhosters.com/apache/maven/maven-3/3.6.2/binaries/apache-maven-3.6.2-bin.tar.gz"
 MVN_BINARY = "$(CURDIR)/maven/bin/mvn"
 
 all: build
 
-build: clean
+configure-base:
+	# Update for install dir
+	@cp -v $(CURDIR)/bin/sqlline.template $(CURDIR)/bin/sqlline
+	@sed -i "s|@INSTALL_DIR@|$(CURDIR)|g" $(CURDIR)/bin/sqlline
+	@sed -i "s|@SQLLINE_VER@|$(SQLLINE_VER)|g" $(CURDIR)/bin/sqlline
+
+configure-icinga:
+	@sed -i 's|#export BINPATH=@EXTERNAL_LIBS.*|export BINPATH=/usr/lib/simba-hive-jdbc:$$BINPATH|' $(CURDIR)/bin/sqlline
+
+build: configure-base clean
 	# download required maven version
-	rm -rf maven && mkdir maven
-	cd maven && curl -O $(MAVEN_DL) && tar -xzf apache-maven*.tar.gz --strip-components=1
+	mkdir maven && \
+		cd maven && \
+		curl -O $(MAVEN_DL) && \
+		tar -xzf apache-maven*.tar.gz --strip-components=1
+	# Package
 	$(MVN_BINARY) -version
 	$(MVN_BINARY) package
-	# Update for install dir
-	cp $(CURDIR)/bin/sqlline.template $(CURDIR)/bin/sqlline
-	sed -i "s|@install_dir@|$(CURDIR)|g" $(CURDIR)/bin/sqlline
-	sed -i "s|@sqlline_ver@|$(SQLLINE_VER)|g" $(CURDIR)/bin/sqlline
 
-install-icinga: build
+install-icinga: configure-base configure-icinga build
 	# Install symlinks
 	rm -f /usr/lib64/nagios/plugins/sqlline-service-check
 	ln -s $(CURDIR)/bin/sqlline-service-check /usr/local/bin/sqlline-service-check
