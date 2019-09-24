@@ -9,11 +9,9 @@
 # debug only
 # -Dsun.security.krb5.debug=true
 
-BINPATH=$(dirname $0)
-export BINPATH=/usr/lib/jvm/jre/lib/ext:@INSTALL_DIR@/target:@SQLLINE_VER@.jar:@install_dir@/hivejars:$BINPATH
-#export BINPATH=@EXTERNAL_LIBS@:$BINPATH
+export "CLASSPATH=/usr/lib/jvm/jre/lib/ext:@INSTALL_DIR@/*"
+#export CLASSPATH=@EXTERNAL_LIBS@:$CLASSPATH
 exec java \
-        -Djava.ext.dirs=$BINPATH \
         -Djavax.net.ssl.trustStore=/etc/pki/java/cacerts \
         -Djavax.net.ssl.trustStorePassword=changeit sqlline.SqlLine \
         "$@"

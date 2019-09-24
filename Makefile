@@ -20,21 +20,27 @@ all: build
 configure-base:
 	# Update for install dir
 	@cp -v $(CURDIR)/bin/sqlline.template $(CURDIR)/bin/sqlline
-	@sed -i "s|@INSTALL_DIR@|$(CURDIR)|g" $(CURDIR)/bin/sqlline
-	@sed -i "s|@SQLLINE_VER@|$(SQLLINE_VER)|g" $(CURDIR)/bin/sqlline
+	@sed -i "s|@INSTALL_DIR@|/usr/lib/sqlline|g" $(CURDIR)/bin/sqlline
+	#@sed -i "s|@SQLLINE_VER@|$(SQLLINE_VER)|g" $(CURDIR)/bin/sqlline
 
 configure-icinga:
-	@sed -i 's|#export BINPATH=@EXTERNAL_LIBS.*|export BINPATH=/usr/lib/simba-hive-jdbc:$$BINPATH|' $(CURDIR)/bin/sqlline
+	@sed -i 's|#export CLASSPATH=@EXTERNAL_LIBS.*|export CLASSPATH=/usr/lib/simba-hive-jdbc:$$CLASSPATH|' $(CURDIR)/bin/sqlline
 
 build: configure-base clean
 	# download required maven version
-	mkdir maven && \
-		cd maven && \
-		curl -O $(MAVEN_DL) && \
-		tar -xzf apache-maven*.tar.gz --strip-components=1
+	@if [[ ! -f $(MVN_BINARY) ]]; then \
+		rm -rf maven; \
+		mkdir maven; \
+		cd maven; \
+		curl -O $(MAVEN_DL); \
+		tar -xzf apache-maven*.tar.gz --strip-components=1; \
+	fi
 	# Package
 	$(MVN_BINARY) -version
 	$(MVN_BINARY) package
+	@echo "To test locally, issue: bin/sqlline.test"
+	@echo "RPM build result: "
+	@find $(CURIDR) -name "*.rpm"
 
 install-icinga: configure-base configure-icinga build
 	# Install symlinks
@@ -49,10 +55,7 @@ clean:
 	@echo "Cleaning and purging project files and local repository artifacts..."
 	mvn clean
 	mvn build-helper:remove-project-artifact
-	rm -f /usr/local/bin/sqlline
-	rm -f /usr/lib64/nagios/plugins/sqlline-service-check
-	rm -f /usr/local/bin/sqlline-service-check
-	rm -rf maven
+	rm -rf ./usr
 
 verify:
 	@# verify project version via mvn
