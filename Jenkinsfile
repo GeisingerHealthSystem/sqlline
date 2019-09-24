@@ -20,8 +20,7 @@ node(params.hostname) {
 		stage('Build sqlline') {
 			dir('sqlline-repo') {
 				sh script: '''
-					mvn clean
-					mvn package
+				    HIVE_ENABLED=1 make
 				'''
 			}
 		}
