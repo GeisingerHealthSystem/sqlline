@@ -57,10 +57,6 @@
   </licenses>
 
   <distributionManagement>
-    <snapshotRepository>
-      <id>ossrh</id>
-      <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-    </snapshotRepository>
     <repository>
       <id>ossrh</id>
       <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
@@ -70,6 +66,11 @@
       <name>SQLLine Website</name>
       <url>file:/home/jhyde/web2/sqlline</url>
     </site>
+    <snapshotRepository>
+      <id>snapshots</id>
+      <name>libs-snapshots</name>
+      <url>http://localhost:6464/artifactory/libs-snapshot</url>
+    </snapshotRepository>
   </distributionManagement>
 
   <issueManagement>
@@ -332,6 +333,58 @@
           </execution>
         </executions>
       </plugin>
+<<<<<<< HEAD
+    <plugin>
+      <groupId>org.codehaus.mojo</groupId>
+      <artifactId>rpm-maven-plugin</artifactId>
+      <version>2.2.0</version>
+      <extensions>true</extensions>
+      <executions>
+        <execution>
+          <id>generate-rpm</id>
+          <goals>
+            <goal>rpm</goal>
+          </goals>
+        </execution>
+      </executions>
+      <configuration>
+        <copyright>2018 - Geisinger Health System</copyright>
+        <group>none</group>
+        <release>1.0</release>
+        <mappings>
+          <mapping>
+            <directoryIncluded>false</directoryIncluded>
+            <directory>/usr/local/bin</directory>
+			<filemode>755</filemode>
+            <username>root</username>
+            <groupname>root</groupname>
+            <sources>
+              <source>
+                <location>bin/sqlline</location>
+                <destination>sqlline</destination>
+              </source>
+              <source>
+                <location>bin/query-safety-check.py</location>
+                <destination>query-safety-check</destination>
+              </source>
+            </sources>
+          </mapping>
+          <mapping>
+            <directoryIncluded>false</directoryIncluded>
+            <directory>/usr/lib/sqlline</directory>
+            <username>root</username>
+            <groupname>root</groupname>
+            <sources>
+              <source>
+                <location>target/sqlline-1.5.0-SNAPSHOT-jar-with-dependencies.jar</location>
+              </source>
+            </sources>
+          </mapping>
+        </mappings>
+      </configuration>
+    </plugin>
+  </plugins>
+=======
     </plugins>
 
     <pluginManagement>
@@ -343,6 +396,7 @@
         </plugin>
       </plugins>
     </pluginManagement>
+>>>>>>> 33d9448a6543a25db7a398daa3fb53693691d4d5
   </build>
 
   <dependencies>
