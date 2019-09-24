@@ -9,7 +9,7 @@
 # debug only
 # -Dsun.security.krb5.debug=true
 
-export "CLASSPATH=/usr/lib/jvm/jre/lib/ext:@INSTALL_DIR@/*"
+export CLASSPATH="/usr/lib/jvm/jre/lib/ext:@INSTALL_DIR@/*"
 #export CLASSPATH=@EXTERNAL_LIBS@:$CLASSPATH
 exec java \
         -Djavax.net.ssl.trustStore=/etc/pki/java/cacerts \

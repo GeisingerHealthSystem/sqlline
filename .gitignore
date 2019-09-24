@@ -8,3 +8,4 @@ target
 bin/sqlline
 maven/*
 hivejars/*
+usr/*

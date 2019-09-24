@@ -15,18 +15,21 @@ SQLLINE_VER = $(shell mvn help:evaluate -Dexpression=project.version -q -DforceS
 MAVEN_DL = "http://mirrors.advancedhosters.com/apache/maven/maven-3/3.6.2/binaries/apache-maven-3.6.2-bin.tar.gz"
 MVN_BINARY = "$(CURDIR)/maven/bin/mvn"
 
+# Toggle hive driver support
+HIVE_ENABLED ?= 0
+
 all: build
 
-configure-base:
+configure:
 	# Update for install dir
 	@cp -v $(CURDIR)/bin/sqlline.template $(CURDIR)/bin/sqlline
 	@sed -i "s|@INSTALL_DIR@|/usr/lib/sqlline|g" $(CURDIR)/bin/sqlline
-	#@sed -i "s|@SQLLINE_VER@|$(SQLLINE_VER)|g" $(CURDIR)/bin/sqlline
+	@#@sed -i "s|@SQLLINE_VER@|$(SQLLINE_VER)|g" $(CURDIR)/bin/sqlline
+	@if [[ $(HIVE_ENABLED) -eq 1 ]]; then \
+		sed -i 's|#export CLASSPATH=@EXTERNAL_LIBS.*|export CLASSPATH=/usr/lib/simba-hive-jdbc/*:$$CLASSPATH|' $(CURDIR)/bin/sqlline; \
+	fi
 
-configure-icinga:
-	@sed -i 's|#export CLASSPATH=@EXTERNAL_LIBS.*|export CLASSPATH=/usr/lib/simba-hive-jdbc:$$CLASSPATH|' $(CURDIR)/bin/sqlline
-
-build: configure-base clean
+build: configure clean
 	# download required maven version
 	@if [[ ! -f $(MVN_BINARY) ]]; then \
 		rm -rf maven; \
@@ -42,7 +45,7 @@ build: configure-base clean
 	@echo "RPM build result: "
 	@find $(CURIDR) -name "*.rpm"
 
-install-icinga: configure-base configure-icinga build
+install-icinga: configure build
 	# Install symlinks
 	rm -f /usr/lib64/nagios/plugins/sqlline-service-check
 	ln -s $(CURDIR)/bin/sqlline-service-check /usr/local/bin/sqlline-service-check
@@ -53,9 +56,9 @@ clean:
 	# If needed, for local .m2 repo
 	# rm -rf ~/.m2/repository/{net,de,asm,io,tomcat,javaolution,commons-pool,commons-dbcp,javax,co,ch,org,com,it}
 	@echo "Cleaning and purging project files and local repository artifacts..."
-	mvn clean
-	mvn build-helper:remove-project-artifact
-	rm -rf ./usr
+	@mvn clean
+	@mvn build-helper:remove-project-artifact
+	@rm -rf ./usr
 
 verify:
 	@# verify project version via mvn
