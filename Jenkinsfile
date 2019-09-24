@@ -30,7 +30,7 @@ node(params.hostname) {
     //Definition by node-id does not seem to be working? 403, Jenkins system config is fine
     env.REPO_NAME = params.repo
     env.ARTIFACTORY_SERVER = 'https://ghsudarepo1rlxv.geisinger.edu/artifactory'
-    env.RPM_ROOT = env.WORKSPACE + "/rpm-repo/simba-hive-jdbc/RPMS"
+    env.RPM_ROOT = env.WORKSPACE + "/sqlline-repo/target/rpm/sqlline/RPMS"
     env.upload_spec = ""
 
     // Define upload spec for RPM uploads
@@ -40,8 +40,8 @@ node(params.hostname) {
     upload_spec = """{
       "files": [
         {
-          "pattern": "${RPM_ROOT}/*.rpm",
-          "target": "$REPO_NAME/simba-hive-jdbc/"
+          "pattern": "${RPM_ROOT}/*/*.rpm",
+          "target": "$REPO_NAME/sqlline/"
         }
      ]
     }"""
