@@ -195,7 +195,7 @@ def main():
     aparser.add_argument('-r', '--realm', action='store', help="AD Server realm (e.g. DOMAIN.COM)")
     aparser.add_argument('-u', '--username', required=False, help="Username")
     aparser.add_argument('-v', '--verbose', action='count', default=0,
-                      help='increase output verbosity (use up to 3 times)')
+        help='increase output verbosity (use up to 3 times)')
     args = aparser.parse_args()
 
     # Function-friendly var assigment
