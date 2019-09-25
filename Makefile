@@ -45,7 +45,7 @@ build: configure clean
 	@echo "RPM build result: "
 	@find $(CURIDR) -name "*.rpm"
 
-install-icinga: configure build
+install-icinga:
 	# Install symlinks
 	rm -f /usr/lib64/nagios/plugins/sqlline-service-check
 	ln -s $(CURDIR)/bin/sqlline-service-check /usr/local/bin/sqlline-service-check
