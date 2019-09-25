@@ -164,7 +164,7 @@ def initialize_logger(debug, log_filename, log_filename_debug):
     handler.setFormatter(formatter)
     logger.addHandler(handler)          
 
-            def main():
+def main():
     """ Main function """
 
     # Set the help_position/width values appropriatly to space our long argument text
