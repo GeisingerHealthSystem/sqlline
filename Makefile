@@ -48,8 +48,8 @@ build: configure clean
 install-icinga:
 	# Install symlinks
 	rm -f /usr/lib64/nagios/plugins/sqlline-service-check
-	ln -s $(CURDIR)/bin/sqlline-service-check /usr/local/bin/sqlline-service-check
-	ln -s $(CURDIR)/bin/sqlline-service-check /usr/lib64/nagios/plugins/sqlline-service-check
+	ln -s $(CURDIR)/bin/sqlline-service-check.py /usr/local/bin/sqlline-service-check
+	ln -s $(CURDIR)/bin/sqlline-service-check.py /usr/lib64/nagios/plugins/sqlline-service-check
 	ln -s $(CURDIR)/bin/sqlline /usr/local/bin/sqlline
 
 clean:
