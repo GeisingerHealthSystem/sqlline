@@ -203,7 +203,7 @@ def main():
     database = args.database
     debug = args.debug
     hostname = args.hostname
-    mode = args.mode
+    mode = args.auth_mode
     query_cmds = []
     realm = args.realm
 
