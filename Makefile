@@ -50,7 +50,6 @@ install-icinga:
 	rm -f /usr/lib64/nagios/plugins/sqlline-service-check
 	ln -sf $(CURDIR)/bin/sqlline-service-check.py /usr/local/bin/sqlline-service-check
 	ln -sf $(CURDIR)/bin/sqlline-service-check.py /usr/lib64/nagios/plugins/sqlline-service-check
-	ln -sf $(CURDIR)/bin/sqlline /usr/local/bin/sqlline
 
 clean:
 	# If needed, for local .m2 repo
