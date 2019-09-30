@@ -104,6 +104,10 @@ class Load(nagiosplugin.Resource):
                 if "com.simba.hiveserver2.support.exceptions.GeneralException" in line:
                     logging.error(str(re.sub('.*FAILED', '', line)))
                     sys.exit(2)
+                if "java.sql.SQLException" in line:
+                    logging.error(str(re.sub('.*FAILED', '', line)))
+                    sys.exit(2)
+
                 norows_match = re.search('.*No rows affected.*',line)
                 rowselect_match = re.search('.*rows selected.*',line)
                 if norows_match:
