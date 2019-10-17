@@ -23,10 +23,12 @@ all: build
 configure:
 	# Update for install dir
 	@cp -v $(CURDIR)/bin/sqlline.template $(CURDIR)/bin/sqlline
+	@cp -v $(CURDIR)/bin/sqlline.test.template $(CURDIR)/bin/sqlline.test
 	@sed -i "s|@INSTALL_DIR@|/usr/lib/sqlline|g" $(CURDIR)/bin/sqlline
 	@#@sed -i "s|@SQLLINE_VER@|$(SQLLINE_VER)|g" $(CURDIR)/bin/sqlline
 	@if [[ $(HIVE_ENABLED) -eq 1 ]]; then \
 		sed -i 's|#export CLASSPATH=@EXTERNAL_LIBS.*|export CLASSPATH=/usr/lib/simba-hive-jdbc/*:$$CLASSPATH|' $(CURDIR)/bin/sqlline; \
+		sed -i 's|#export CLASSPATH=@EXTERNAL_LIBS.*|export CLASSPATH=/usr/lib/simba-hive-jdbc/*:$$CLASSPATH|' $(CURDIR)/bin/sqlline.test; \
 	fi
 
 build: configure clean
@@ -41,7 +43,8 @@ build: configure clean
 	# Package
 	$(MVN_BINARY) -version
 	$(MVN_BINARY) package
-	@echo "To test locally, issue: bin/sqlline.test"
+	@echo "To perform a quick test locally, issue: bin/sqlline.test"
+	@echo "Binary written to bin/sqlline"
 	@echo "RPM build result: "
 	@find $(CURIDR) -name "*.rpm"
 

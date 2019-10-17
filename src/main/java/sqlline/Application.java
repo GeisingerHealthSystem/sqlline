@@ -100,6 +100,15 @@ public class Application {
   private static final List<String> ISOLATION_LEVEL_LIST =
       Collections.unmodifiableList(Arrays.asList(ISOLATION_LEVELS));
 
+  private static final String[] CONNECT_MODES = {
+      "askCredentials",
+      "notAskCredentials",
+      "useNPTogetherOrEmpty",
+  };
+
+  private static final List<String> CONNECT_INTERACTIVE_MODES =
+      Collections.unmodifiableList(Arrays.asList(CONNECT_MODES));
+
   /** Creates an Application. */
   public Application() {
   }
@@ -181,6 +190,7 @@ public class Application {
     final Map<String, OutputFormat> outputFormats = new HashMap<>();
     outputFormats.put("vertical", new VerticalOutputFormat(sqlLine));
     outputFormats.put("table", new TableOutputFormat(sqlLine));
+    outputFormats.put("ansiconsole", new AnsiConsoleOutputFormat(sqlLine));
     outputFormats.put("csv", new SeparatedValuesOutputFormat(sqlLine, ","));
     outputFormats.put("tsv", new SeparatedValuesOutputFormat(sqlLine, "\t"));
     XmlAttributeOutputFormat xmlAttrs = new XmlAttributeOutputFormat(sqlLine);
@@ -239,6 +249,7 @@ public class Application {
         new ReflectiveCommandHandler(sqlLine, empty, "manual"),
         new ReflectiveCommandHandler(sqlLine, tableCompleter, "importedkeys"),
         new ReflectiveCommandHandler(sqlLine, empty, "procedures"),
+        new ReflectiveCommandHandler(sqlLine, empty, "schemas"),
         new ReflectiveCommandHandler(sqlLine, empty, "tables"),
         new ReflectiveCommandHandler(sqlLine, empty, "typeinfo"),
         new ReflectiveCommandHandler(sqlLine, empty, "commandhandler"),
@@ -273,6 +284,7 @@ public class Application {
         new ReflectiveCommandHandler(sqlLine,
             new StringsCompleter(outputFormats.keySet()), "outputformat"),
         new ReflectiveCommandHandler(sqlLine, empty, "autocommit"),
+        new ReflectiveCommandHandler(sqlLine, empty, "readonly"),
         new ReflectiveCommandHandler(sqlLine, empty, "commit"),
         new ReflectiveCommandHandler(sqlLine, new FileNameCompleter(),
             "properties"),
@@ -334,6 +346,14 @@ public class Application {
 
   public Map<String, HighlightStyle> getName2HighlightStyle() {
     return BuiltInHighlightStyle.BY_NAME;
+  }
+
+  public Collection<String> getConnectInteractiveModes() {
+    return CONNECT_INTERACTIVE_MODES;
+  }
+
+  public String getDefaultInteractiveMode() {
+    return "askCredentials";
   }
 }
 

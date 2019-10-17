@@ -6,6 +6,7 @@ target
 .idea/
 *.jar
 bin/sqlline
+bin/sqlline.test
 maven/*
 hivejars/*
 usr/*

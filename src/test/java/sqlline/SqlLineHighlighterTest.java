@@ -152,6 +152,7 @@ public class SqlLineHighlighterTest {
         "--select",
         "/* \"''\"",
         "/*",
+        "/*/ should be a comment",
         "--",
         "--\n/*",
         "/* kh\n'asd'ad*/",
@@ -322,6 +323,20 @@ public class SqlLineHighlighterTest {
     expectedStyle.defaults.set("!set".length(), line.indexOf("\"'\n\""));
     expectedStyle
         .sqlIdentifierQuotes.set(line.indexOf("\"'\n\""), line.length());
+    checkLineAgainstAllHighlighters(line, expectedStyle);
+
+    // !connect command with quoted arguments
+    line = "!connect \"jdbc:string\" admin 'pass \"word' driver";
+    expectedStyle = new ExpectedHighlightStyle(line.length());
+    expectedStyle.commands.set(0, "!connect".length());
+    expectedStyle.defaults.set(line.indexOf(" \"jdbc:string"));
+    expectedStyle.sqlIdentifierQuotes.set(
+        line.indexOf("\"jdbc:string"), line.indexOf(" admin"));
+    expectedStyle.defaults.set(
+        line.indexOf(" admin"), line.indexOf("'pass \"word'"));
+    expectedStyle.singleQuotes.set(
+        line.indexOf("'pass \"word'"), line.indexOf(" driver"));
+    expectedStyle.defaults.set(line.indexOf(" driver"), line.length());
     checkLineAgainstAllHighlighters(line, expectedStyle);
 
     // sql with !sql command
@@ -505,6 +520,15 @@ public class SqlLineHighlighterTest {
     expectedStyle.defaults.set(line.indexOf(" dual"), line.length());
     checkLineAgainstAllHighlighters(line, expectedStyle);
 
+    //one line comment first
+    line = "-- \nselect 1;";
+    expectedStyle = new ExpectedHighlightStyle(line.length());
+    expectedStyle.comments.set(0, line.indexOf("select"));
+    expectedStyle.keywords.set(line.indexOf("select"), line.indexOf(" 1"));
+    expectedStyle.defaults.set(line.indexOf(" 1"), line.indexOf("1;"));
+    expectedStyle.numbers.set(line.indexOf("1"));
+    expectedStyle.defaults.set(line.length() - 1);
+    checkLineAgainstAllHighlighters(line, expectedStyle);
   }
 
   /**
@@ -538,8 +562,6 @@ public class SqlLineHighlighterTest {
     for (Map.Entry<SqlLine, SqlLineHighlighter> sqlLine2HighLighterEntry
         : sqlLine2Highlighter.entrySet()) {
       SqlLine sqlLine = sqlLine2HighLighterEntry.getKey();
-      SqlLineHighlighter sqlLineHighlighter =
-          sqlLine2HighLighterEntry.getValue();
       sqlLine.runCommands(dc, "!connect "
           + SqlLineArgsTest.ConnectionSpec.H2.url + " "
           + SqlLineArgsTest.ConnectionSpec.H2.username + " \"\"");
@@ -697,7 +719,7 @@ public class SqlLineHighlighterTest {
   public void testHighlightWithException() {
     new MockUp<SqlLineHighlighter>() {
       @Mock
-      private void handleSqlSyntax(String buffer, BitSet keywordBitSet,
+      void handleSqlSyntax(String buffer, BitSet keywordBitSet,
           BitSet quoteBitSet, BitSet sqlIdentifierQuotesBitSet,
           BitSet commentBitSet, BitSet numberBitSet, boolean isCommandPresent) {
         throw new RuntimeException("Highlight exception");

@@ -5,7 +5,7 @@ Command-line shell for issuing SQL to relational databases via JDBC.
 ## History
 
 A fork of [Marc Prud'hommeaux](https://github.com/mprudhom)'s
-[sqlline](http://sourceforge.net/projects/sqlline/) project, also
+[sqlline](https://sourceforge.net/projects/sqlline/) project, also
 incorporating changes made by the
 [LucidDB](https://github.com/LucidDB/luciddb) project,
 now modernized, mavenized and forkable in github.
@@ -14,12 +14,15 @@ See also [release history](HISTORY.md).
 ## License and distribution
 
 SQLLine is distributed under the
-[3-clause BSD License](http://opensource.org/licenses/BSD-3-Clause),
+[3-clause BSD License](https://opensource.org/licenses/BSD-3-Clause),
 meaning that you are free to redistribute, modify, or sell it with
 almost no restrictions.
 
 It is distributed via the
-[Maven Central Repository](http://search.maven.org/#search%7Cga%7C1%7Csqlline).
+[Maven Central Repository](https://search.maven.org/#search%7Cga%7C1%7Csqlline).
+
+## Demos
+[demos](https://github.com/julianhyde/sqlline/wiki/Demos)
 
 ## Quick start
 
@@ -27,7 +30,7 @@ If you have [Coursier](https://github.com/coursier/coursier) installed, you
 can quickly connect to a [demo Hypersonic database](https://github.com/julianhyde/foodmart-data-hsqldb) with:
 
 ```
-$ coursier launch sqlline:sqlline:1.7.0 org.hsqldb:hsqldb:2.4.1 net.hydromatic:foodmart-data-hsqldb:0.4 -M sqlline.SqlLine -- -u jdbc:hsqldb:res:foodmart -n FOODMART -p FOODMART -d org.hsqldb.jdbcDriver
+$ coursier launch sqlline:sqlline:1.9.0 org.hsqldb:hsqldb:2.5.0 net.hydromatic:foodmart-data-hsqldb:0.4 -M sqlline.SqlLine -- -u jdbc:hsqldb:res:foodmart -n FOODMART -p FOODMART -d org.hsqldb.jdbcDriver
 0: jdbc:hsqldb:res:foodmart> select avg("shelf_height" * "shelf_width" * "shelf_depth") as "avg_volume" from "product";
 +-------------------------+
 |       avg_volume        |
@@ -106,7 +109,7 @@ single-quote ('`'`'),
 bang ('`!`') and
 percent ('`%`') are some common examples.
 
-Read [the manual](http://julianhyde.github.io/sqlline/manual.html).
+Read [the manual](https://julianhyde.github.io/sqlline/manual.html).
 
 ## Maven Usage
 
@@ -116,7 +119,7 @@ Use the following definition to use `sqlline` in your maven project:
 <dependency>
   <groupId>sqlline</groupId>
   <artifactId>sqlline</artifactId>
-  <version>1.7.0</version>
+  <version>1.9.0</version>
 </dependency>
 ```
 
@@ -125,7 +128,7 @@ Use the following definition to use `sqlline` in your maven project:
 Prerequisites:
 
 * Maven 3.2.5 or higher
-* Java 8 or higher (10 preferred)
+* Java 8 or higher (12 preferred)
 
 Check out and build:
 

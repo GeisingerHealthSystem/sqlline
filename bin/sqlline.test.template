@@ -1,0 +1,12 @@
+#!/bin/bash
+# sqlline - Script to launch SQL shell on Unix, Linux or Mac OS
+
+BINPATH=$(dirname $0)
+export CLASSPATH="/usr/lib/jvm/jre/lib/ext:$BINPATH/../target/*"
+#export CLASSPATH=@EXTERNAL_LIBS@:$CLASSPATH
+exec java \
+        -Djavax.net.ssl.trustStore=/etc/pki/java/cacerts \
+        -Djavax.net.ssl.trustStorePassword=changeit sqlline.SqlLine \
+        "$@"
+
+# End sqlline

@@ -1,4 +1,4 @@
-SQLLine 1.7.0
+SQLLine 1.8.0
 
 Copyright © 2002, 2003, 2004, 2005 Marc Prud'hommeaux
 Copyright 2006-2019 Julian Hyde
@@ -41,7 +41,7 @@ dbinfo — Provide information about the current database
 describe
 describe — Describe a table
 dropall
-dropall — Drop all tables in the database
+dropall — Drop all tables in the database or in the schema
 exportedkeys
 exportedkeys — List exported foreign keys for a database
 go
@@ -50,6 +50,12 @@ help
 help — Display help information
 history
 history — Display the command history
+  -d Print timestamps for each event (default for !history)
+  -f Print full time date stamps in the US format
+  -E Print full time date stamps in the European format
+  -i Print full time date stamps in ISO8601 format
+  -n Suppresses command numbers
+  -r Reverses the order of the commands
 importedkeys
 importedkeys — List imported foreign keys for a database
 indexes
@@ -74,6 +80,8 @@ properties
 properties — Connect to the database defined in the specified properties file.
 quit
 quit — Exit SQLLine
+readonly
+readonly - Enable or disable readonly connection
 reconnect
 reconnect — Reconnect to the current database
 record
@@ -88,6 +96,8 @@ save
 save — Save the current preferences
 scan
 scan — Scan class path for JDBC drivers
+schemas
+schemas — List all the schemas in the database
 script
 script — Save executed commands to a file
 set
@@ -180,7 +190,7 @@ dbinfo — Provide information about the current database
 describe
 describe — Describe a table
 dropall
-dropall — Drop all tables in the database
+dropall — Drop all tables in the database or in the schema
 exportedkeys
 exportedkeys — List exported foreign keys for a database
 go
@@ -189,6 +199,12 @@ help
 help — Display help information
 history
 history — Display the command history
+  -d Print timestamps for each event (default for !history)
+  -f Print full time date stamps in the US format
+  -E Print full time date stamps in the European format
+  -i Print full time date stamps in ISO8601 format
+  -n Suppresses command numbers
+  -r Reverses the order of the commands
 importedkeys
 importedkeys — List imported foreign keys for a database
 indexes
@@ -223,6 +239,8 @@ run
 run — Execute a command script
 save
 save — Save the current preferences
+schemas
+schemas — List all the schemas in the database
 scan
 scan — Scan class path for JDBC drivers
 script
@@ -287,7 +305,7 @@ For information on obtaining the software under another license, contact the cop
 
 Obtaining SQLLine
 
-SQLLine is hosted on SourceForge, and is located at http://sqlline.sf.net. The latest release can be downloaded from http://sqlline.sf.net/download.html.
+SQLLine is hosted on SourceForge, and is located at https://sqlline.sf.net. The latest release can be downloaded from https://sqlline.sf.net/download.html.
 
 Installation
 
@@ -297,9 +315,9 @@ Required software
 
 SQLLine depends on the following software:
 
-Java™ Virtual Machine - SQLLine is a pure java program, and requires Java version 1.3 or higher in order to run. The latest JVM can be downloaded from http://java.sun.com.
+Java™ Virtual Machine - SQLLine is a pure java program, and requires Java version 1.3 or higher in order to run. The latest JVM can be downloaded from https://java.sun.com.
 
-JLine - SQLLine uses the JLine console reader for command line editing, tab-completion, and command history. It can be downloaded from http://jline.sf.net. Version 0.8.1 or higher is required.
+JLine - SQLLine uses the JLine console reader for command line editing, tab-completion, and command history. It can be downloaded from https://jline.sf.net. Version 0.8.1 or higher is required.
 
 JDBC™ Driver(s) - Since SQLLine uses the Java Database Connectivity package to connect to your database, you need to obtain the correct JDBC driver libraries for your database. Any JDBC compliant driver can be used for this purpose. Drivers can be located by referring to the section on known JDBC drivers, or else by referring to your database vendor's web site.
 
@@ -311,7 +329,7 @@ Create a new directory/folder where you like. This will be referred to as sqllin
 
 Download sqlline.jar into sqllinedir.
 
-Download the latest jline.jar from http://jline.sf.net into sqllinedir.
+Download the latest jline.jar from https://jline.sf.net into sqllinedir.
 
 Download your database's JDBC driver files into sqllinedir. Note that some JDBC drivers require some installation, such as uncompressing or unzipping.
 
@@ -407,7 +425,7 @@ dbinfo — Provide information about the current database
 describe
 describe — Describe a table
 dropall
-dropall — Drop all tables in the database
+dropall — Drop all tables in the database or in the schema
 exportedkeys
 exportedkeys — List exported foreign keys for a database
 go
@@ -416,6 +434,12 @@ help
 help — Display help information
 history
 history — Display the command history
+  -d Print timestamps for each event (default for !history)
+  -f Print full time date stamps in the US format
+  -E Print full time date stamps in the European format
+  -i Print full time date stamps in ISO8601 format
+  -n Suppresses command numbers
+  -r Reverses the order of the commands
 importedkeys
 importedkeys — List imported foreign keys for a database
 indexes
@@ -450,6 +474,8 @@ run
 run — Execute a command script
 save
 save — Save the current preferences
+schemas
+schemas — List all the schemas in the database
 scan
 scan — Scan class path for JDBC drivers
 script
@@ -958,11 +984,11 @@ dropall
 
 Name
 
-dropall — Drop all tables in the database
+dropall — Drop all tables in the database or in the schema
 
 Synopsis
 
-!dropall
+!dropall [schema_pattern]
 
 Description
 
@@ -1080,6 +1106,12 @@ sqlline> !help
 !go                 Select the current connection
 !help               Print a summary of command usage
 !history            Display the command history
+                    -d Print timestamps for each event (default for !history)
+                    -f Print full time date stamps in the US format
+                    -E Print full time date stamps in the European format
+                    -i Print full time date stamps in ISO8601 format
+                    -n Suppresses command numbers
+                    -r Reverses the order of the commands
 !importedkeys       List all the imported keys for the specified table
 !indexes            List all the indexes for the specified table
 !isolation          Set the transaction isolation for this connection
@@ -1090,7 +1122,7 @@ sqlline> !help
 !nickname           Create a friendly name for the connection (updates command
                     prompt)
 !outputformat       Set the output format for displaying results (table,
-                    vertical, csv, tsv, xmlattrs, xmlelements, json)
+                    vertical, csv, tsv, xmlattrs, xmlelements, json, ansiconsole)
 !primarykeys        List all the primary keys for the specified table
 !procedures         List all the procedures
 !prompthandler      Set custom prompt handler class name
@@ -1102,6 +1134,7 @@ sqlline> !help
 !rollback           Roll back the current transaction (if autocommit is off)
 !run                Run a script from the specified file
 !save               Save the current variables and aliases
+!schemas            List all the schemas in the database
 !scan               Scan for installed JDBC drivers
 !script             Start saving a script to a file
 !set                Set a sqlline variable
@@ -1150,7 +1183,7 @@ maxHistoryRows  integer    The maximum number of history rows
 mode            emacs/vi   The editing mode
 nullValue       String     Use String in place of  NULL values
 numberFormat    pattern    Format numbers using DecimalFormat pattern
-outputFormat    table/vertical/csv/tsv/xmlattrs/xmlelements/json
+outputFormat    table/vertical/csv/tsv/xmlattrs/xmlelements/json/ansiconsole
                            Format mode for result display
 prompt          pattern    Format prompt
 propertiesFile  path       File from which SQLLine reads properties on
@@ -1160,6 +1193,7 @@ propertiesFile  path       File from which SQLLine reads properties on
 rightPrompt     pattern    Format right prompt
 rowLimit        integer    Maximum number of rows returned from a query; zero
                            means no limit
+showCompletionDesc true/false Display help for completions
 showElapsedTime true/false Display execution time when verbose
 showHeader      true/false Show column names in query results
 showNestedErrs  true/false Display nested errors
@@ -1214,7 +1248,12 @@ history
 Name
 
 history — Display the command history
-
+  -d Print timestamps for each event (default for !history)
+  -f Print full time date stamps in the US format
+  -E Print full time date stamps in the European format
+  -i Print full time date stamps in ISO8601 format
+  -n Suppresses command numbers
+  -r Reverses the order of the commands
 Synopsis
 
 !history
@@ -1303,7 +1342,7 @@ Synopsis
 
 Description
 
-Set the isolation level for the current transaction. For a description of the different isolation levels, see http://java.sun.com/j2se/1.3/docs/api/java/sql/Connection.html#field_detail.
+Set the isolation level for the current transaction. For a description of the different isolation levels, see https://java.sun.com/j2se/1.3/docs/api/java/sql/Connection.html#field_detail.
 If the specified isolation level is not supported or DEFAULT is specified then there will be used level returned by java.sql.DatabaseMetaData#getDefaultTransactionIsolation
 
 Example of "isolation" command
@@ -1354,7 +1393,7 @@ Synopsis
 
 Description
 
-Execute an arbitrary metadata method agains the current connection. refpurpose are separated by spaces. Use "" for a blank String, and null for a null parameter. For information on available metadata methods, see http://java.sun.com/j2se/1.3/docs/api/java/sql/DatabaseMetaData.html.
+Execute an arbitrary metadata method agains the current connection. refpurpose are separated by spaces. Use "" for a blank String, and null for a null parameter. For information on available metadata methods, see https://java.sun.com/j2se/1.3/docs/api/java/sql/DatabaseMetaData.html.
 
 Example of "metadata" command
 
@@ -1415,6 +1454,8 @@ Synopsis
 Description
 
 Set the mode for displaying results from statements. This is useful for saving output from SQL statements to either a visually pleasing format or an easily parseable format.
+In the case of csv or table outputformat there could be specified additional parameters like csv delimiter, csv quote character, max column width.
+Such settings will change corresponding properties' values. If the parameters not specified then properties are left as is.
 
 Example of table output formatting
 
@@ -1450,14 +1491,14 @@ NAME        Microsoft
 
 Example of CSV output formatting
 
-0: jdbc:oracle:thin:@localhost:1521:mydb> !outputformat csv
-0: jdbc:oracle:thin:@localhost:1521:mydb> SELECT * FROM COMPANY;
-'COMPANY_ID','NAME'
-'1','Apple'
-'2','Sun'
-'3','IBM'
-'4','Microsoft'
-4 rows selected (0.012 seconds)
+0: jdbc:calcite:model=target/test-classes/mod> !set outputFormat csv ### @
+0: jdbc:calcite:model=target/test-classes/mod> SELECT * FROM COMPANY;
+@COMPANY_ID@###@NAME@
+@1@###@Apple@
+@2@###@Sun@
+@3@###@IBM@
+@4@###@Microsoft@
+4 rows selected (0.014 seconds)
 
 Example of TSV output formatting
 
@@ -1517,6 +1558,18 @@ Example of JSON output formatting
 {"COMPANY_ID":3,"NAME":"IBM"},
 {"COMPANY_ID":4,"NAME":"Microsoft"}
 ]}
+4 rows selected (0.03 seconds)
+0: jdbc:calcite:model=target/test-classes/mod>
+
+Example of AnsiConsole output formatting
+
+0: jdbc:calcite:model=target/test-classes/mod> !outputformat ansiconsole
+0: jdbc:calcite:model=target/test-classes/mod> SELECT * FROM COMPANY;
+COMPANY_ID NAME
+1          Apple
+2          Sun
+3          IBM
+4          Microsoft
 4 rows selected (0.03 seconds)
 0: jdbc:calcite:model=target/test-classes/mod>
 
@@ -1918,6 +1971,34 @@ no        7.3     org.postgresql.Driver
 yes       0.9     org.sourceforge.jxdbcon.JXDBConDriver
 
 sqlline>
+
+schemas
+
+Name
+
+schemas — List all the schemas in the database
+
+Synopsis
+
+!schemas
+
+Description
+
+List all the schemas in the database of the current connection.
+
+Example of "schemas" command
+
+0: jdbc:postgresql:thin:@localhost:5432:mydb> !schemas
+
++--------------------+---------------+
+|    table_schem     | table_catalog |
++--------------------+---------------+
+| information_schema |               |
+| pg_catalog         |               |
+| public             |               |
++--------------------+---------------+
+
+0: jdbc:postgresql:thin:@localhost:5432:mydb>
 
 script
 

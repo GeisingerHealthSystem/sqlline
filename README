@@ -1,4 +1,4 @@
-SQLLine release 1.7.0
+SQLLine release 1.9.0
 
 This is a source or binary distribution of SQLLine.
 
@@ -11,4 +11,4 @@ If this is a source distribution, you can find instructions how to
 build the release in the "Building" section in README.md.
 
 Further information about SQLLine is available at its web site,
-http://julianhyde.github.io/sqlline.
+https://julianhyde.github.io/sqlline.

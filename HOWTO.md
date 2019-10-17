@@ -11,8 +11,8 @@ Capitalization is tricky:
 ## How to make a release (for committers)
 
 Make sure `mvn clean install`, `mvn site`, and
-`mvn javadoc:javadoc javadoc:test-javadoc` pass under JDK 8, 9, 10 and
-11.
+`mvn javadoc:javadoc javadoc:test-javadoc` pass under JDK 8, 9, 10,
+11, 12, and 13.
 
 Write release notes. Run the
 [relNotes](https://github.com/julianhyde/share/blob/master/tools/relNotes)
@@ -21,7 +21,7 @@ script and append the output to [HISTORY.md](HISTORY.md).
 Update version numbers in README, README.md, src/docbkx/manual.xml,
 and the copyright date in NOTICE.
 
-Switch to JDK 11.
+Switch to JDK 13.
 
 Check that the sandbox is clean:
 
@@ -44,7 +44,7 @@ mvn -Prelease -DskipTests release:perform
 ```
 
 Stage the release:
-* Go to http://oss.sonatype.org and log in.
+* Go to https://oss.sonatype.org and log in.
 * Under "Build Promotion", click on "Staging Repositories".
 * Select the line "sqlline-nnnn", and click "Close". You might need to
   click "Refresh" a couple of times before it closes.
@@ -59,7 +59,7 @@ If the vote is successful, send an email with subject
 "[RESULT] [VOTE] Release sqlline-X.Y.0 (release candidate N)".
 
 Publish the release:
-* Go to http://oss.sonatype.org and log in.
+* Go to https://oss.sonatype.org and log in.
 * Under "Build Promotion", click on "Staging Repositories".
 * Select the line "sqlline-nnnn", and click "Release".
 

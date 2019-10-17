@@ -34,8 +34,12 @@ import org.jline.reader.*;
 import org.jline.reader.impl.history.DefaultHistory;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
+import org.jline.utils.AttributedString;
+import org.jline.utils.AttributedStringBuilder;
+import org.jline.utils.AttributedStyle;
 
 import static org.jline.keymap.KeyMap.alt;
+import static org.jline.keymap.KeyMap.ctrl;
 
 /**
  * A console SQL shell with command completion.
@@ -56,6 +60,7 @@ public class SqlLine {
       ResourceBundle.getBundle(SqlLine.class.getName(), Locale.ROOT);
 
   private static final String SEPARATOR = System.getProperty("line.separator");
+
   private boolean exit = false;
   /** Whether we are currently prompting for input (say, user name or
    * password). If prompting, we ignore trailing linefeeds, but for SQL input we
@@ -87,7 +92,7 @@ public class SqlLine {
 
   private static boolean initComplete = false;
 
-  private SqlLineSignalHandler signalHandler = null;
+  private final SqlLineSignalHandler signalHandler;
   private final Completer sqlLineCommandCompleter;
 
   static {
@@ -235,15 +240,7 @@ public class SqlLine {
     reflector = new Reflector(this);
     getOpts().loadProperties(System.getProperties());
     sqlLineCommandCompleter = new SqlLineCommandCompleter(this);
-
-    // attempt to dynamically load signal handler
-    try {
-      Class handlerClass = Class.forName("sqlline.SunSignalHandler");
-      signalHandler =
-          (SqlLineSignalHandler) handlerClass.getConstructor().newInstance();
-    } catch (Throwable t) {
-      handleException(t);
-    }
+    signalHandler = new SqlLineSignalHandler();
   }
 
   /**
@@ -290,7 +287,7 @@ public class SqlLine {
     return getDatabaseConnections().current().connection;
   }
 
-  DatabaseMetaDataWrapper getDatabaseMetaData() {
+  DatabaseMetaData getDatabaseMetaData() {
     if (getDatabaseConnections().current() == null) {
       throw new IllegalArgumentException(loc("no-current-connection"));
     }
@@ -298,23 +295,6 @@ public class SqlLine {
       throw new IllegalArgumentException(loc("no-current-connection"));
     }
     return connections.current().getDatabaseMetaData();
-  }
-
-
-  /**
-   * Entry point to creating a {@link ColorBuffer} with color
-   * enabled or disabled depending on the value of {@link SqlLineOpts#getColor}.
-   */
-  ColorBuffer getColorBuffer() {
-    return new ColorBuffer(getOpts().getColor());
-  }
-
-  /**
-   * Entry point to creating a {@link ColorBuffer} with color enabled or
-   * disabled depending on the value of {@link SqlLineOpts#getColor}.
-   */
-  ColorBuffer getColorBuffer(String msg) {
-    return new ColorBuffer(msg, getOpts().getColor());
   }
 
   /**
@@ -420,20 +400,24 @@ public class SqlLine {
     if (url != null || user != null || pass != null || driver != null) {
       String com =
           COMMAND_PREFIX + "connect "
-              + (url == null ? "\"\"" : url) + " "
-              + (user == null || user.length() == 0 ? "''" : user) + " "
-              + (pass == null || pass.length() == 0 ? "''" : pass) + " "
-              + (driver == null ? "" : driver);
+              + (driver == null || driver.trim().isEmpty()
+                  ? "" : "-p driver " + driver + " ")
+              + (user == null ? "" : "-p user " + escapeAndQuote(user) + " ")
+              + (pass == null
+                  ? "" : "-p password " + escapeAndQuote(pass) + " ")
+              + escapeAndQuote(url);
       debug("issuing: " + com);
       dispatch(com, new DispatchCallback());
     }
 
     if (nickname != null) {
-      dispatch(COMMAND_PREFIX + "nickname " + nickname, new DispatchCallback());
+      dispatch(COMMAND_PREFIX
+          + "nickname " + escapeAndQuote(nickname), new DispatchCallback());
     }
 
     if (logFile != null) {
-      dispatch(COMMAND_PREFIX + "record " + logFile, new DispatchCallback());
+      dispatch(COMMAND_PREFIX
+          + "record " + escapeAndQuote(logFile), new DispatchCallback());
     }
 
     if (commandHandler != null) {
@@ -600,15 +584,13 @@ public class SqlLine {
     if (getLineReader() != null) {
       return getLineReader();
     }
-    TerminalBuilder terminalBuilder = TerminalBuilder.builder();
+    final TerminalBuilder terminalBuilder =
+        TerminalBuilder.builder().signalHandler(signalHandler);
     final Terminal terminal;
     if (inputStream != null) {
-      terminalBuilder =
-          terminalBuilder.streams(inputStream, System.out);
-      terminal = terminalBuilder.build();
+      terminal = terminalBuilder.streams(inputStream, System.out).build();
     } else {
-      terminalBuilder = terminalBuilder.system(true);
-      terminal = terminalBuilder.build();
+      terminal = terminalBuilder.system(true).build();
       getOpts().set(BuiltInProperty.MAX_WIDTH, terminal.getWidth());
       getOpts().set(BuiltInProperty.MAX_HEIGHT, terminal.getHeight());
     }
@@ -617,6 +599,9 @@ public class SqlLine {
         .terminal(terminal)
         .parser(new SqlLineParser(this))
         .variable(LineReader.HISTORY_FILE, getOpts().getHistoryFile())
+        .variable(LineReader.LINE_OFFSET, 1)  // start line numbers with 1
+        .option(LineReader.Option.AUTO_LIST, false)
+        .option(LineReader.Option.AUTO_MENU, true)
         .option(LineReader.Option.DISABLE_EVENT_EXPANSION, true);
     final LineReader lineReader = inputStream == null
         ? lineReaderBuilder
@@ -628,6 +613,8 @@ public class SqlLine {
 
     addWidget(lineReader,
         this::nextColorSchemeWidget, "CHANGE_COLOR_SCHEME", alt('h'));
+    addWidget(lineReader,
+        this::toggleLineNumbersWidget, "TOGGLE_LINE_NUMBERS", alt(ctrl('n')));
     fileHistory.attach(lineReader);
     setLineReader(lineReader);
     return lineReader;
@@ -668,6 +655,13 @@ public class SqlLine {
     return true;
   }
 
+  boolean toggleLineNumbersWidget() {
+    getOpts().set(BuiltInProperty.SHOW_LINE_NUMBERS,
+        !getOpts().getShowLineNumbers());
+    getLineReader().callWidget(LineReader.REDISPLAY);
+    return true;
+  }
+
   void usage() {
     output(loc("cmd-usage"));
   }
@@ -689,7 +683,7 @@ public class SqlLine {
       return;
     }
 
-    if (isComment(line)) {
+    if (isOneLineComment(line)) {
       callback.setStatus(DispatchCallback.Status.SUCCESS);
       return;
     }
@@ -763,7 +757,21 @@ public class SqlLine {
    * @param line the line to be tested
    * @return true if a comment
    */
-  boolean isComment(String line, boolean trim) {
+  boolean isOneLineComment(String line, boolean trim) {
+    String[] inputLines = line.split("\n");
+    for (String inputLine: inputLines) {
+      if (!isComment(inputLine, trim)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  boolean isOneLineComment(String line) {
+    return isOneLineComment(line, true);
+  }
+
+  private boolean isComment(String line, boolean trim) {
     final String trimmedLine = trim ? line.trim() : line;
     for (String comment: getDialect().getSqlLineOneLineComments()) {
       if (trimmedLine.startsWith(comment)) {
@@ -773,17 +781,13 @@ public class SqlLine {
     return false;
   }
 
-  boolean isComment(String line) {
-    return isComment(line, true);
-  }
-
   /**
    * Print the specified message to the console
    *
    * @param msg the message to print
    */
   public void output(String msg) {
-    output(msg, true);
+    output(msg, true, getOutputStream());
   }
 
   public void info(String msg) {
@@ -792,7 +796,7 @@ public class SqlLine {
     }
   }
 
-  public void info(ColorBuffer msg) {
+  public void info(AttributedString msg) {
     if (!getOpts().getSilent()) {
       output(msg, true, getErrorStream());
     }
@@ -805,7 +809,7 @@ public class SqlLine {
    * @return false always
    */
   public boolean error(String msg) {
-    output(getColorBuffer().red(msg), true, errorStream);
+    output(new AttributedString(msg, AttributedStyles.RED), true, errorStream);
     return false;
   }
 
@@ -816,27 +820,25 @@ public class SqlLine {
 
   public void debug(String msg) {
     if (getOpts().getVerbose()) {
-      output(getColorBuffer().blue(msg), true, errorStream);
+      output(
+          new AttributedString(msg, AttributedStyles.BLUE), true, errorStream);
     }
   }
 
-  public void output(ColorBuffer msg) {
+  public void output(AttributedString msg) {
     output(msg, true);
   }
 
-  public void output(String msg, boolean newline, PrintStream out) {
-    output(getColorBuffer(msg), newline, out);
-  }
-
-  public void output(ColorBuffer msg, boolean newline) {
+  public void output(AttributedString msg, boolean newline) {
     output(msg, newline, getOutputStream());
   }
 
-  public void output(ColorBuffer msg, boolean newline, PrintStream out) {
+  private void output(
+      String msg, String ansiMsg, boolean newline, PrintStream out) {
     if (newline) {
-      out.println(msg.getColor());
+      out.println(ansiMsg);
     } else {
-      out.print(msg.getColor());
+      out.print(ansiMsg);
     }
 
     if (recordOutputFile == null) {
@@ -846,18 +848,27 @@ public class SqlLine {
     // only write to the record file if we are writing a line ...
     // otherwise we might get garbage from backspaces and such.
     if (newline) {
-      recordOutputFile.addLine(msg.getMono()); // always just write mono
+      recordOutputFile.addLine(msg); // always just write mono
     }
   }
 
-  /**
-   * Print the specified message to the console
-   *
-   * @param msg     the message to print
-   * @param newline if false, do not append a newline
-   */
-  public void output(String msg, boolean newline) {
-    output(getColorBuffer(msg), newline);
+  public void output(String msg, boolean newline, PrintStream out) {
+    output(msg, msg, newline, out);
+  }
+
+  public void output(AttributedString msg, boolean newline, PrintStream out) {
+    if (getOpts().getColor()) {
+      final String ansiMsg = getTerminal() == null
+          ? msg.toAnsi()
+          : msg.toAnsi(getTerminal());
+      output(msg.toString(), ansiMsg, newline, out);
+    } else {
+      output(msg.toString(), newline, out);
+    }
+  }
+
+  void readonlyStatus(Connection c) throws SQLException {
+    debug(loc("readonly-status", c.isReadOnly() + ""));
   }
 
   void autocommitStatus(Connection c) throws SQLException {
@@ -984,55 +995,16 @@ public class SqlLine {
         "%");
   }
 
-  ResultSet getTables() throws SQLException {
+  ResultSet getTables(String schemaTemplate) throws SQLException {
     if (!assertConnection()) {
       return null;
     }
 
     return getDatabaseConnection().meta.getTables(
         getDatabaseConnection().meta.getConnection().getCatalog(),
-        null,
+        schemaTemplate,
         "%",
         new String[] {"TABLE"});
-  }
-
-  Set<String> getColumnNames(DatabaseMetaDataWrapper meta) {
-    Set<String> names = new HashSet<>();
-    info(loc("building-tables"));
-
-    try {
-      ResultSet columns = getColumns("%");
-
-      try {
-        int total = getSize(columns);
-        int index = 0;
-
-        while (columns.next()) {
-          // add the following strings:
-          // 1. column name
-          // 2. table name
-          // 3. tablename.columnname
-
-          progress(index++, total);
-          final String tableName = columns.getString("TABLE_NAME");
-          final String columnName = columns.getString("COLUMN_NAME");
-          names.add(tableName);
-          names.add(columnName);
-          names.add(tableName + "." + columnName);
-        }
-
-        progress(index, index);
-      } finally {
-        columns.close();
-      }
-
-      info(loc("done"));
-
-      return names;
-    } catch (Throwable t) {
-      handleException(t);
-      return Collections.emptySet();
-    }
   }
 
   /**
@@ -1072,9 +1044,11 @@ public class SqlLine {
    * <blockquote>{ {"!tables"}, {"My Schema", "My Table"} }</blockquote>
    *
    * @param line the line to break up
+   * @param keepSqlIdentifierQuotes keep SQL identifiers
    * @return an array of compound words
    */
-  public String[][] splitCompound(String line) {
+  public String[][] splitCompound(
+      String line, boolean keepSqlIdentifierQuotes) {
     final Dialect dialect = getDialect();
 
     int state = SPACE;
@@ -1137,7 +1111,9 @@ public class SqlLine {
             state = SPACE;
             final String word =
                 String.copyValueOf(chars, idStart, i - idStart - 1);
-            current.add(word);
+            current.add(keepSqlIdentifierQuotes
+                ? dialect.getOpenQuote() + word + dialect.getCloseQuote()
+                : word);
           }
         }
         break;
@@ -1151,6 +1127,8 @@ public class SqlLine {
             word = null;
           } else if (dialect.isUpper()) {
             word = word.toUpperCase(Locale.ROOT);
+          } else if (dialect.isLower()) {
+            word = word.toLowerCase(Locale.ROOT);
           }
           current.add(word);
           state = c == '.' ? DOT_SPACE : SPACE;
@@ -1175,6 +1153,8 @@ public class SqlLine {
           word = null;
         } else if (dialect.isUpper()) {
           word = word.toUpperCase(Locale.ROOT);
+        } else if (dialect.isLower()) {
+          word = word.toLowerCase(Locale.ROOT);
         }
       }
       current.add(word);
@@ -1188,6 +1168,10 @@ public class SqlLine {
     }
 
     return words.toArray(new String[0][]);
+  }
+
+  public String[][] splitCompound(String line) {
+    return splitCompound(line, false);
   }
 
   Dialect getDialect() {
@@ -1218,8 +1202,8 @@ public class SqlLine {
   private static final int UNQUOTED = 3;
 
   String dequote(String str) {
-    if (str == null) {
-      return null;
+    if (str == null || str.isEmpty()) {
+      return str;
     }
 
     if ((str.length() == 1 && (str.charAt(0) == '\'' || str.charAt(0) == '\"'))
@@ -1273,6 +1257,9 @@ public class SqlLine {
         break;
       }
       if (line.charAt(i) == '\'' || line.charAt(i) == '"') {
+        if (isCharEscaped(line, i)) {
+          continue;
+        }
         if (inQuotes) {
           if (line.charAt(tokenStart) == line.charAt(i)) {
             inQuotes = false;
@@ -1311,10 +1298,67 @@ public class SqlLine {
     }
     String[] ret = new String[tokens.size()];
     for (int i = 0; i < tokens.size(); i++) {
-      ret[i] = dequote(tokens.get(i));
+      final String token = tokens.get(i);
+      if (token != null && token.charAt(0) == '"') {
+        ret[i] = unescape(dequote(tokens.get(i)));
+      } else {
+        ret[i] = dequote(tokens.get(i));
+      }
     }
 
     return ret;
+  }
+
+  String unescape(String input) {
+    final String escapingSymbols = "\\\"";
+    StringBuilder builder = new StringBuilder();
+    boolean escaping = true;
+    for (int i = 0; i < input.length(); i++) {
+      if (escaping
+          && input.charAt(i) == '\\'
+          && i < input.length() - 1
+          && escapingSymbols.indexOf(input.charAt(i + 1)) != -1) {
+        escaping = false;
+        continue;
+      }
+      escaping = true;
+      builder.append(input.charAt(i));
+    }
+    return builder.toString();
+  }
+
+  // escape and quote if first and last symbols are not equal quotes
+  String escapeAndQuote(String input) {
+    if (input == null || input.isEmpty()) {
+      return "\"\"";
+    }
+    if (input.length() > 1
+        && input.charAt(0) == input.charAt(input.length() - 1)
+        && (input.charAt(0) == '"' || input.charAt(0) == '\'')) {
+      return input;
+    }
+    final String escapingSymbols = "\\\"";
+    StringBuilder builder = new StringBuilder("\"");
+    for (int i = 0; i < input.length(); i++) {
+      if (escapingSymbols.indexOf(input.charAt(i)) != -1) {
+        builder.append("\\");
+      }
+      builder.append(input.charAt(i));
+    }
+    builder.append("\"");
+    return builder.toString();
+  }
+
+  boolean isCharEscaped(String input, int charAt) {
+
+    if (charAt < 0 || charAt >= input.length()) {
+      return false;
+    }
+    int current = charAt;
+    while (current > 0 && input.charAt(current - 1) == '\\') {
+      current--;
+    }
+    return (charAt - current) % 2 != 0;
   }
 
   static <K, V> Map<K, V> map(K key, V value, Object... obs) {
@@ -1414,8 +1458,8 @@ public class SqlLine {
    * @return the wrapped string
    */
   String wrap(String toWrap, int len, int start) {
-    StringBuilder buff = new StringBuilder();
-    StringBuilder line = new StringBuilder();
+    final StringBuilder buff = new StringBuilder();
+    final StringBuilder line = new StringBuilder();
 
     char[] head = new char[start];
     Arrays.fill(head, ' ');
@@ -1424,7 +1468,18 @@ public class SqlLine {
          tok.hasMoreTokens();) {
       String next = tok.nextToken();
       final int x = line.length();
-      line.append(line.length() == 0 ? "" : " ").append(next);
+      final int index = next.indexOf('\n');
+      if (index >= 0) {
+        line.setLength(x + index);
+        buff.append(line).append(' ').append(next, 0, index)
+            .append(SEPARATOR).append(head);
+        line.setLength(0);
+        if (next.length() > index + 1) {
+          line.append(next.substring(index + 1));
+        }
+      } else {
+        line.append(line.length() == 0 ? "" : " ").append(next);
+      }
       if (line.length() > len) {
         // The line is now too long. Backtrack: remove the last word, start a
         // new line containing just that word.
@@ -1440,37 +1495,31 @@ public class SqlLine {
     return buff.toString();
   }
 
-  /**
-   * Output a progress indicator to the console.
-   *
-   * @param cur the current progress
-   * @param max the maximum progress, or -1 if unknown
-   */
-  void progress(int cur, int max) {
-    StringBuilder out = new StringBuilder();
+  /** Returns a value padded with spaces to a given length,
+   * with spaces added to right side. */
+  static String rpad(String value, int padLen) {
+    return String.format(Locale.ROOT, "%1$-" + padLen + "s",
+        Objects.toString(value, ""));
+  }
 
-    if (lastProgress != null) {
-      char[] back = new char[lastProgress.length()];
-      Arrays.fill(back, '\b');
-      out.append(back);
+  /** Returns a value padded with spaces to a given length,
+   * with equal numbers of spaces on left and right side. */
+  static String center(String str, int len) {
+    final int n = len - str.length();
+    if (n <= 0) {
+      return str;
     }
-
-    String progress =
-        cur + "/" + (max == -1 ? "?" : "" + max) + " "
-            + (max == -1 ? "(??%)"
-            : "(" + cur * 100 / (max == 0 ? 1 : max) + "%)");
-
-    if (cur >= max && max != -1) {
-      progress += " " + loc("done") + SEPARATOR;
-      lastProgress = null;
-    } else {
-      lastProgress = progress;
+    final StringBuilder buf = new StringBuilder();
+    final int left = n / 2;
+    final int right = n - left;
+    for (int i = 0; i < left; i++) {
+      buf.append(' ');
     }
-
-    out.append(progress);
-
-    getOutputStream().print(out.toString());
-    getOutputStream().flush();
+    buf.append(str);
+    for (int i = 0; i < right; i++) {
+      buf.append(' ');
+    }
+    return buf.toString();
   }
 
   ///////////////////////////////
@@ -1641,34 +1690,26 @@ public class SqlLine {
   }
 
   void runBatch(List<String> statements) {
-    try {
-      Statement stmnt = createStatement();
-      try {
-        for (String statement : statements) {
-          stmnt.addBatch(statement);
-        }
+    try (Statement stmnt = createStatement()) {
+      for (String statement : statements) {
+        stmnt.addBatch(statement);
+      }
 
-        int[] counts = stmnt.executeBatch();
-        if (counts == null) {
-          counts = new int[0];
-        }
+      int[] counts = stmnt.executeBatch();
+      if (counts == null) {
+        counts = new int[0];
+      }
 
-        output(
-            getColorBuffer()
-                .pad(getColorBuffer().bold("COUNT"), 8)
-                .append(getColorBuffer().bold("STATEMENT")));
+      output(new AttributedStringBuilder()
+          .append(rpad("COUNT", 8), AttributedStyle.BOLD)
+          .append("STATEMENT", AttributedStyle.BOLD)
+          .toAttributedString());
 
-        for (int i = 0; i < counts.length; i++) {
-          output(
-              getColorBuffer().pad(counts[i] + "", 8)
-                  .append(statements.get(i)));
-        }
-      } finally {
-        try {
-          stmnt.close();
-        } catch (Exception e) {
-          // ignore
-        }
+      for (int i = 0; i < counts.length; i++) {
+        output(new AttributedStringBuilder()
+            .append(rpad(counts[i] + "", 8))
+            .append(statements.get(i))
+            .toAttributedString());
       }
     } catch (Exception e) {
       handleException(e);
@@ -1687,7 +1728,11 @@ public class SqlLine {
       int index = 1;
       int size = cmds.size();
       for (String cmd : cmds) {
-        info(getColorBuffer().pad(index++ + "/" + size, 13).append(cmd));
+        info(new AttributedStringBuilder()
+            .append(rpad(index++ + "/" + size, 13))
+            .append(cmd)
+            .toAttributedString());
+
         dispatch(cmd, callback);
         boolean success = callback.isSuccess();
         // if we do not force script execution, abort
@@ -1712,12 +1757,12 @@ public class SqlLine {
   }
 
   void outputProperty(String key, String value) {
-    output(getColorBuffer()
-        .green(getColorBuffer()
-            .pad(key, 20)
-            .getMono())
-        .append(value));
+    output(new AttributedStringBuilder()
+        .append(rpad(key, 20), AttributedStyles.GREEN)
+        .append(value)
+        .toAttributedString());
   }
+
   public SqlLineOpts getOpts() {
     return appConfig.opts;
   }
@@ -1798,6 +1843,10 @@ public class SqlLine {
 
   LineReader getLineReader() {
     return lineReader;
+  }
+
+  Terminal getTerminal() {
+    return lineReader == null ? null : lineReader.getTerminal();
   }
 
   void setLineReader(LineReader reader) {
