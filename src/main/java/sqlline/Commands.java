@@ -21,13 +21,17 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.jline.reader.EOFError;
 import org.jline.reader.History;
 import org.jline.reader.MaskingCallback;
 import org.jline.reader.Parser;
 import org.jline.reader.UserInterruptException;
 import org.jline.reader.impl.LineReaderImpl;
 import org.jline.terminal.Terminal;
+import org.jline.utils.AttributedString;
+import org.jline.utils.AttributedStringBuilder;
+import org.jline.utils.AttributedStyle;
+
+import static sqlline.SqlLine.rpad;
 
 /**
  * Collection of available commands.
@@ -190,19 +194,37 @@ public class Commands {
     }
 
     try {
-      Method[] methods =
-          sqlLine.getDatabaseMetaData().getClass().getDeclaredMethods();
       Set<String> methodNames = new TreeSet<>();
       Set<String> methodNamesUpper = new TreeSet<>();
-      for (Method method : methods) {
-        final int modifiers = method.getModifiers();
-        if (!Modifier.isPublic(modifiers)
-            || Modifier.isStatic(modifiers)) {
-          continue;
+      Class currentClass = sqlLine.getConnection().getMetaData().getClass();
+      Object res = null;
+      do {
+        for (Method method : currentClass.getDeclaredMethods()) {
+          final int modifiers = method.getModifiers();
+          if (!Modifier.isPublic(modifiers)
+              || Modifier.isStatic(modifiers)) {
+            continue;
+          }
+          methodNames.add(method.getName());
+          methodNamesUpper.add(method.getName().toUpperCase(Locale.ROOT));
+          if (methodNamesUpper.contains(cmd.toUpperCase(Locale.ROOT))) {
+            try {
+              res = sqlLine.getReflector().invoke(
+                  sqlLine.getDatabaseMetaData(),
+                  sqlLine.getDatabaseMetaData().getClass(), cmd, argList);
+            } catch (Exception e) {
+              sqlLine.handleException(e);
+              callback.setToFailure();
+              return;
+            }
+            if (res != null) {
+              break;
+            }
+          }
         }
-        methodNames.add(method.getName());
-        methodNamesUpper.add(method.getName().toUpperCase(Locale.ROOT));
-      }
+        currentClass = currentClass.getSuperclass();
+      } while (res == null
+          && DatabaseMetaData.class.isAssignableFrom(currentClass));
 
       if (!methodNamesUpper.contains(cmd.toUpperCase(Locale.ROOT))) {
         sqlLine.error(sqlLine.loc("no-such-method", cmd));
@@ -214,9 +236,6 @@ public class Commands {
         return;
       }
 
-      final Object res = sqlLine.getReflector()
-          .invoke(sqlLine.getDatabaseMetaData(), DatabaseMetaDataWrapper.class,
-              cmd, argList);
       if (res instanceof ResultSet) {
         try (ResultSet rs = (ResultSet) res) {
           sqlLine.print(rs, callback);
@@ -239,9 +258,9 @@ public class Commands {
           sqlLine.getOutputStream(),
           sqlLine.getErrorStream(),
           argsLine.isEmpty()
-              ? new String[]{"-d"}
+              ? new String[]{sqlLine.getOpts().getHistoryFlags()}
               : sqlLine.split(argsLine, " "));
-    } catch (IOException e) {
+    } catch (Exception e) {
       callback.setToFailure();
     }
     callback.setToSuccess();
@@ -416,6 +435,10 @@ public class Commands {
     metadata("getTables", args, callback);
   }
 
+  public void schemas(String line, DispatchCallback callback) {
+    metadata("getSchemas", Collections.emptyList(), callback);
+  }
+
   public void typeinfo(String line, DispatchCallback callback) {
     metadata("getTypeInfo", Collections.emptyList(), callback);
   }
@@ -444,6 +467,12 @@ public class Commands {
   }
 
   public void dropall(String line, DispatchCallback callback) {
+    String[] parts = sqlLine.split(line);
+    if (parts.length > 2) {
+      sqlLine.error("Usage: !dropall [schema_pattern]");
+      callback.setToFailure();
+      return;
+    }
     DatabaseConnection databaseConnection = sqlLine.getDatabaseConnection();
     if (databaseConnection == null || databaseConnection.getUrl() == null) {
       sqlLine.error(sqlLine.loc("no-current-connection"));
@@ -452,24 +481,23 @@ public class Commands {
     }
     try {
       String question = sqlLine.loc("really-drop-all");
-      if (!sqlLine.getLineReader().readLine(question).equals("y")) {
+      final int userResponse =
+          getUserAnswer(question, 'y', 'n', 'Y', 'N');
+      if (userResponse != 'y' && userResponse != 'Y') {
         sqlLine.error("abort-drop-all");
         callback.setToFailure();
         return;
       }
 
       List<String> cmds = new LinkedList<>();
-      ResultSet rs = sqlLine.getTables();
-      try {
+      final char openQuote = sqlLine.getDialect().getOpenQuote();
+      final char closeQuote = sqlLine.getDialect().getOpenQuote();
+      try (ResultSet rs =
+               sqlLine.getTables(parts.length > 1 ? parts[1] : null)) {
         while (rs.next()) {
-          cmds.add("DROP TABLE "
-              + rs.getString("TABLE_NAME") + ";");
-        }
-      } finally {
-        try {
-          rs.close();
-        } catch (Exception e) {
-          // ignore
+          cmds.add("DROP TABLE " + openQuote + rs.getString("TABLE_SCHEM")
+              + closeQuote + "." + openQuote
+              + rs.getString("TABLE_NAME")  + closeQuote + ";");
         }
       }
 
@@ -485,7 +513,7 @@ public class Commands {
     }
   }
 
-  private int getUserAnswer(String question, int... allowedAnswers)
+  int getUserAnswer(String question, int... allowedAnswers)
       throws IOException {
     final Set<Integer> allowedAnswerSet =
         IntStream.of(allowedAnswers).boxed().collect(Collectors.toSet());
@@ -538,33 +566,27 @@ public class Commands {
       driverNames.put(driver.getClass().getName(), driver);
     }
 
-    String compliant =
-        sqlLine.getColorBuffer().pad(sqlLine.loc("compliant"), 10).getMono();
-    String jdbcVersion =
-        sqlLine.getColorBuffer().pad(sqlLine.loc("jdbc-version"), 8).getMono();
-    String driverClass =
-        sqlLine.getColorBuffer(sqlLine.loc("driver-class")).getMono();
-    sqlLine.output(sqlLine.getColorBuffer()
-        .bold(compliant)
-        .bold(jdbcVersion)
-        .bold(driverClass));
+    final String header = rpad(sqlLine.loc("compliant"), 10)
+        + rpad(sqlLine.loc("jdbc-version"), 8)
+        + sqlLine.loc("driver-class");
+    sqlLine.output(new AttributedString(header, AttributedStyle.BOLD));
 
     for (Map.Entry<String, Driver> driverEntry : driverNames.entrySet()) {
-      final Driver driver = driverEntry.getValue();
       final String name = driverEntry.getKey();
       try {
-        ColorBuffer msg = sqlLine.getColorBuffer()
-            .pad(driver.jdbcCompliant() ? "yes" : "no", 10)
-            .pad(driver.getMajorVersion() + "."
-                + driver.getMinorVersion(), 8)
-            .append(name);
+        final Class<?> klass = Class.forName(name);
+        Driver driver = (Driver) klass.getConstructor().newInstance();
+        final String msg = rpad(driver.jdbcCompliant() ? "yes" : "no", 10)
+            + rpad(driver.getMajorVersion() + "." + driver.getMinorVersion(), 8)
+            + name;
         if (driver.jdbcCompliant()) {
           sqlLine.output(msg);
         } else {
-          sqlLine.output(sqlLine.getColorBuffer().red(msg.getMono()));
+          sqlLine.output(new AttributedString(msg, AttributedStyles.RED));
         }
       } catch (Throwable t) {
-        sqlLine.output(sqlLine.getColorBuffer().red(name)); // error with driver
+        // error with driver
+        sqlLine.output(new AttributedString(name, AttributedStyles.RED));
       }
     }
 
@@ -772,6 +794,24 @@ public class Commands {
     callback.setToSuccess();
   }
 
+  public void readonly(String line, DispatchCallback callback)
+      throws SQLException {
+    if (!sqlLine.assertConnection()) {
+      callback.setToFailure();
+      return;
+    }
+
+    if (line.endsWith("on")) {
+      sqlLine.getDatabaseConnection().connection.setReadOnly(true);
+    } else if (line.endsWith("off")) {
+      sqlLine.getDatabaseConnection().connection.setReadOnly(false);
+    }
+
+    sqlLine.showWarnings();
+    sqlLine.readonlyStatus(sqlLine.getDatabaseConnection().connection);
+    callback.setToSuccess();
+  }
+
   public void dbinfo(String line, DispatchCallback callback) {
     if (!sqlLine.assertConnection()) {
       callback.setToFailure();
@@ -783,11 +823,14 @@ public class Commands {
 
     for (String method : METHODS) {
       try {
+        final String s =
+            String.valueOf(sqlLine.getReflector()
+                .invoke(sqlLine.getDatabaseMetaData(), method));
         sqlLine.output(
-            sqlLine.getColorBuffer()
-                .pad(method, padlen)
-                .append("" + sqlLine.getReflector()
-                    .invoke(sqlLine.getDatabaseMetaData(), method)));
+            new AttributedStringBuilder()
+                .append(rpad(method, padlen))
+                .append(s)
+                .toAttributedString());
       } catch (Exception e) {
         sqlLine.handleException(e);
       }
@@ -802,7 +845,25 @@ public class Commands {
   }
 
   public void outputformat(String line, DispatchCallback callback) {
-    set("set " + line, callback);
+    try {
+      String[] lines = sqlLine.split(line);
+      sqlLine.getOpts().setOutputFormat(lines[1]);
+      if ("csv".equals(lines[1])) {
+        if (lines.length > 2) {
+          sqlLine.getOpts().set(BuiltInProperty.CSV_DELIMITER, lines[2]);
+        }
+        if (lines.length > 3) {
+          sqlLine.getOpts().setCsvQuoteCharacter(lines[3]);
+        }
+      } else if ("table".equals(lines[1])) {
+        if (lines.length > 2) {
+          sqlLine.getOpts().set(BuiltInProperty.MAX_COLUMN_WIDTH, lines[2]);
+        }
+      }
+      callback.setToSuccess();
+    } catch (Exception e) {
+      callback.setToFailure();
+    }
   }
 
   public void brief(String line, DispatchCallback callback) {
@@ -916,32 +977,53 @@ public class Commands {
       return;
     }
 
-    if (line.trim().endsWith(";")) {
-      line = line.trim();
-      line = line.substring(0, line.length() - 1);
-    }
-
     if (!sqlLine.assertConnection()) {
       callback.setToFailure();
       return;
     }
 
-    String sql = line;
-
-    if (sql.startsWith(SqlLine.COMMAND_PREFIX)) {
-      sql = sql.substring(1);
+    String fullLine = line;
+    if (fullLine.startsWith(SqlLine.COMMAND_PREFIX)) {
+      fullLine = fullLine.substring(1);
     }
 
-    String prefix = call ? "call" : "sql";
-
-    if (sql.startsWith(prefix)) {
-      sql = sql.substring(prefix.length());
+    final String prefix = call ? "call" : "sql";
+    if (fullLine.startsWith(prefix)) {
+      fullLine = fullLine.substring(prefix.length());
     }
 
+    final StringBuilder sql2execute = new StringBuilder();
+    for (String sqlItem : fullLine.split(";")) {
+      sql2execute.append(sqlItem).append(";");
+      if (sqlLine.isOneLineComment(sql2execute.toString())
+          || isSqlContinuationRequired(sql2execute.toString())) {
+        continue;
+      }
+      final String sql = skipLast(flush(sql2execute));
+      executeSingleQuery(sql, call, callback);
+    }
+    if (!callback.isFailure()) {
+      callback.setToSuccess();
+    }
+  }
+
+  /** Returns the contents of a {@link StringBuilder} and clears the builder. */
+  static String flush(StringBuilder buf) {
+    final String s = buf.toString();
+    buf.setLength(0);
+    return s;
+  }
+
+  /** Returns a string with the last character removed. */
+  private static String skipLast(String s) {
+    return s.substring(0, s.length() - 1);
+  }
+
+  private void executeSingleQuery(String sql, boolean call,
+      DispatchCallback callback) {
     // batch statements?
     if (sqlLine.getBatch() != null) {
       sqlLine.getBatch().add(sql);
-      callback.setToSuccess();
       return;
     }
 
@@ -954,8 +1036,9 @@ public class Commands {
         if (sqlLine.getOpts().getCompiledConfirmPattern().matcher(sql).find()
             && sqlLine.getOpts().getConfirm()) {
           final String question = sqlLine.loc("really-perform-action");
-          final int userResponse = getUserAnswer(question, 'y', 'n', 'Y', 'N');
-          if (userResponse != 'y') {
+          final int userResponse =
+              getUserAnswer(question, 'y', 'n', 'Y', 'N');
+          if (userResponse != 'y' && userResponse != 'Y') {
             sqlLine.error(sqlLine.loc("abort-action"));
             callback.setToFailure();
             return;
@@ -969,7 +1052,6 @@ public class Commands {
           stmnt = sqlLine.createStatement();
           callback.trackSqlQuery(stmnt);
           hasResults = stmnt.execute(sql);
-          callback.setToSuccess();
         }
 
         sqlLine.showWarnings();
@@ -977,14 +1059,11 @@ public class Commands {
 
         if (hasResults) {
           do {
-            ResultSet rs = stmnt.getResultSet();
-            try {
+            try (ResultSet rs = stmnt.getResultSet()) {
               int count = sqlLine.print(rs, callback);
               long end = System.currentTimeMillis();
 
               reportResult(sqlLine.loc("rows-selected", count), start, end);
-            } finally {
-              rs.close();
             }
           } while (SqlLine.getMoreResults(stmnt));
         } else {
@@ -1007,11 +1086,9 @@ public class Commands {
     } catch (Exception e) {
       callback.setToFailure();
       sqlLine.error(e);
-      return;
     }
 
     sqlLine.showWarnings();
-    callback.setToSuccess();
   }
 
   public void quit(String line, DispatchCallback callback) {
@@ -1061,11 +1138,11 @@ public class Commands {
     try {
       Connection connection = databaseConnection.getConnection();
       if (connection != null && !connection.isClosed()) {
-        sqlLine.info(
+        sqlLine.debug(
             sqlLine.loc("closing", connection.getClass().getName()));
         connection.close();
       } else {
-        sqlLine.info(sqlLine.loc("already-closed"));
+        sqlLine.debug(sqlLine.loc("already-closed"));
       }
     } catch (Exception e) {
       callback.setToFailure();
@@ -1118,10 +1195,10 @@ public class Commands {
     }
   }
 
-  public void connect(String line, DispatchCallback callback) throws Exception {
-    String example = "Usage: connect <url> <username> <password> [driver]"
+  public void connect(String line, DispatchCallback callback) {
+    String example =
+        "Usage: connect [-p property value]* <url> [username] [password] [driver]"
         + SqlLine.getSeparator();
-
     String[] parts = sqlLine.split(line);
     if (parts == null) {
       callback.setToFailure();
@@ -1142,11 +1219,6 @@ public class Commands {
           return;
         }
       }
-    }
-    if (parts.length - offset < 2) {
-      callback.setToFailure();
-      sqlLine.error(example);
-      return;
     }
 
     String url = parts.length < offset + 1 ? null : parts[offset];
@@ -1233,7 +1305,20 @@ public class Commands {
         "password",
         "javax.jdo.option.ConnectionPassword",
         "ConnectionPassword");
-
+    Properties info = (Properties) props.get(CONNECT_PROPERTY);
+    if (info != null) {
+      url = url == null ? info.getProperty("url") : url;
+      driver = driver == null ? info.getProperty("driver") : driver;
+      username = username == null ? info.getProperty("user") : username;
+      password = password == null ? info.getProperty("password") : password;
+    }
+    final String connectInteractionMode =
+        sqlLine.getOpts().get(BuiltInProperty.CONNECT_INTERACTION_MODE);
+    if (isBlank(username)
+        && isBlank(password)
+        && "useNPTogetherOrEmpty".equals(connectInteractionMode)) {
+      username = password = "";
+    }
     if (url == null || url.length() == 0) {
       callback.setToFailure();
       sqlLine.error(sqlLine.loc("no-url"));
@@ -1262,21 +1347,21 @@ public class Commands {
     }
 
     sqlLine.debug("Connecting to " + url);
-
-    if (username == null) {
-      username = readUsername(url);
+    if (!"notAskCredentials".equals(connectInteractionMode)) {
+      if (username == null) {
+        username = readUsername(url);
+        username = isBlank(username) ? null : username;
+      }
+      if (password == null) {
+        password = readPassword(url);
+        password = isBlank(password) ? null : password;
+      }
     }
-    if (password == null) {
-      password = readPassword(url);
-    }
-
-    Properties info = (Properties) props.get(CONNECT_PROPERTY);
     DatabaseConnection connection =
         new DatabaseConnection(sqlLine, driver, url, username, password, info);
     try {
       sqlLine.getDatabaseConnections().setConnection(connection);
       sqlLine.getDatabaseConnection().getConnection();
-      sqlLine.setCompletions();
       callback.setToSuccess();
     } catch (Exception e) {
       connection.close();
@@ -1284,6 +1369,11 @@ public class Commands {
       callback.setToFailure();
       sqlLine.error(e);
     }
+  }
+
+  /** Returns whether a string is null or empty. */
+  private boolean isBlank(String s) {
+    return s == null || s.isEmpty();
   }
 
   String readUsername(String url) {
@@ -1334,12 +1424,10 @@ public class Commands {
         closed = true;
       }
 
-      sqlLine.output(
-          sqlLine.getColorBuffer()
-              .pad(" #" + index++ + "", 5)
-              .pad(closed ? sqlLine.loc("closed") : sqlLine.loc("open"), 9)
-              .pad(databaseConnection.getNickname(), 20)
-              .append(" " + databaseConnection.getUrl()));
+      sqlLine.output(rpad(" #" + index++ + "", 5)
+          + rpad(closed ? sqlLine.loc("closed") : sqlLine.loc("open"), 9)
+          + rpad(databaseConnection.getNickname(), 20)
+          + " " + databaseConnection.getUrl());
     }
 
     callback.setToSuccess();
@@ -1470,7 +1558,6 @@ public class Commands {
     List<String> cmds = new LinkedList<>();
 
     try {
-      final Parser parser = sqlLine.getLineReader().getParser();
       try (BufferedReader reader = new BufferedReader(
           new InputStreamReader(
               new FileInputStream(expand(filename)), StandardCharsets.UTF_8))) {
@@ -1486,16 +1573,9 @@ public class Commands {
           cmd.append(" \n");
           cmd.append(scriptLine);
 
-          try {
-            needsContinuation = false;
-            parser.parse(cmd.toString(), cmd.length(),
-                Parser.ParseContext.ACCEPT_LINE);
-          } catch (EOFError e) {
-            needsContinuation = true;
-          }
+          needsContinuation = isSqlContinuationRequired(cmd.toString());
           if (!needsContinuation && !cmd.toString().trim().isEmpty()) {
-            cmds.add(maybeTrim(cmd.toString()));
-            cmd.setLength(0);
+            cmds.add(maybeTrim(flush(cmd)));
           }
         }
 
@@ -1642,15 +1722,14 @@ public class Commands {
       sqlLine.error(sqlLine.loc("record-already-running", outputFile));
       return;
     }
-
-    String filename;
-    if (line.length() == "record".length()
-        || (filename =
-            sqlLine.dequote(line.substring("record".length() + 1))) == null) {
+    String[] cmd = sqlLine.split(line);
+    if (cmd.length != 2) {
       sqlLine.error("Usage: record <file name>");
       callback.setToFailure();
       return;
     }
+
+    final String filename = cmd[1];
 
     try {
       outputFile = new OutputFile(expand(filename));
@@ -1684,7 +1763,7 @@ public class Commands {
   public void help(String line, DispatchCallback callback) {
     String[] parts = sqlLine.split(line);
     String cmd = parts.length > 1 ? parts[1] : "";
-    TreeSet<ColorBuffer> clist = new TreeSet<>();
+    TreeSet<String> clist = new TreeSet<>();
 
     for (CommandHandler commandHandler : sqlLine.getCommandHandlers()) {
       if (cmd.length() == 0
@@ -1694,13 +1773,12 @@ public class Commands {
         if (cmd.equals("set")) {
           help += sqlLine.loc("variables");
         }
-        clist.add(sqlLine.getColorBuffer()
-            .pad("!" + commandHandler.getName(), 20)
-            .append(help));
+        clist.add(rpad(SqlLine.COMMAND_PREFIX + commandHandler.getName(), 20)
+            + help);
       }
     }
 
-    for (ColorBuffer c : clist) {
+    for (String c : clist) {
       sqlLine.output(c);
     }
 
@@ -1733,7 +1811,7 @@ public class Commands {
         org.jline.builtins.Commands.less(sqlLine.getLineReader().getTerminal(),
             in, sqlLine.getOutputStream(), sqlLine.getErrorStream(),
             null, new String[]{});
-      } catch (InterruptedException e) {
+      } catch (Exception e) {
         callback.setToFailure();
         sqlLine.error(e);
         return;
@@ -1824,6 +1902,16 @@ public class Commands {
   static Map<String, String> asMap(Properties properties) {
     //noinspection unchecked
     return (Map) properties;
+  }
+
+  private boolean isSqlContinuationRequired(String sql) {
+    if (sqlLine.getLineReader() == null) {
+      return false;
+    }
+    return SqlLineParser.SqlParserState.OK
+        != ((SqlLineParser) sqlLine.getLineReader().getParser())
+            .parseState(sql, sql.length(), Parser.ParseContext.ACCEPT_LINE)
+            .getState();
   }
 
   /**

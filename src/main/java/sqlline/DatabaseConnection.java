@@ -11,6 +11,7 @@
 */
 package sqlline;
 
+import java.lang.reflect.Proxy;
 import java.sql.*;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -25,7 +26,7 @@ import org.jline.reader.impl.completer.ArgumentCompleter;
 class DatabaseConnection {
   private final SqlLine sqlLine;
   Connection connection;
-  DatabaseMetaDataWrapper meta;
+  DatabaseMetaData meta;
   private final String driver;
   private final String url;
   private final Properties info;
@@ -40,8 +41,12 @@ class DatabaseConnection {
     this.driver = driver;
     this.url = url;
     this.info = properties == null ? new Properties() : properties;
-    this.info.put("user", username);
-    this.info.put("password", password);
+    if (username != null) {
+      this.info.put("user", username);
+    }
+    if (password != null) {
+      this.info.put("password", password);
+    }
   }
 
   @Override public String toString() {
@@ -50,8 +55,7 @@ class DatabaseConnection {
 
   void setCompletions(boolean skipmeta) {
     // setup the completer for the database
-    sqlCompleter = new ArgumentCompleter(
-        new SqlCompleter(sqlLine, skipmeta));
+    sqlCompleter = new ArgumentCompleter(new SqlCompleter(sqlLine, skipmeta));
     // not all argument elements need to hold true
     ((ArgumentCompleter) sqlCompleter).setStrict(false);
   }
@@ -78,7 +82,8 @@ class DatabaseConnection {
         Stream.of(meta.getSQLKeywords().split(","))
             .collect(Collectors.toSet());
     dialect = DialectImpl.create(keywords, identifierQuoteString,
-        productName, meta.storesUpperCaseIdentifiers());
+        productName, meta.storesLowerCaseIdentifiers(),
+        meta.storesUpperCaseIdentifiers(), meta.getExtraNameCharacters());
   }
 
   /**
@@ -128,8 +133,10 @@ class DatabaseConnection {
     // Instead, we use the driver instance to make the connection
 
     connection = theDriver.connect(url, info);
-    meta = new DatabaseMetaDataWrapper(sqlLine, connection.getMetaData());
-
+    meta = (DatabaseMetaData) Proxy.newProxyInstance(
+        DatabaseMetaData.class.getClassLoader(),
+        new Class[] {DatabaseMetaData.class},
+        new DatabaseMetaDataHandler(connection.getMetaData()));
     try {
       sqlLine.debug(
           sqlLine.loc("connected",
@@ -156,6 +163,12 @@ class DatabaseConnection {
     }
 
     try {
+      connection.setReadOnly(sqlLine.getOpts().getReadOnly());
+    } catch (Exception e) {
+      sqlLine.handleException(e);
+    }
+
+    try {
       // nothing is done off of this command beyond the handle so no
       // need to use the callback.
       sqlLine.getCommands().isolation("isolation: " + sqlLine.getOpts()
@@ -177,7 +190,7 @@ class DatabaseConnection {
     }
 
     connect();
-
+    sqlLine.setCompletions();
     return connection;
   }
 
@@ -190,7 +203,7 @@ class DatabaseConnection {
     try {
       try {
         if (connection != null && !connection.isClosed()) {
-          sqlLine.output(
+          sqlLine.debug(
               sqlLine.loc("closing", connection.getClass().getName()));
           connection.close();
         }
@@ -200,26 +213,28 @@ class DatabaseConnection {
     } finally {
       connection = null;
       meta = null;
+      schema = null;
     }
   }
 
   public Collection<String> getTableNames(boolean force) {
-    Set<String> names = new TreeSet<>();
-    for (Schema.Table table : getSchema().getTables()) {
-      names.add(table.getName());
-    }
-    return names;
+    return getSchema().getSchema2tables().values().stream()
+        .map(Map::keySet).flatMap(Collection::stream)
+        .collect(Collectors.toSet());
   }
 
-  Schema getSchema() {
-    if (schema == null) {
+  Schema getSchema(boolean force) {
+    if (schema == null || force) {
       schema = new Schema();
     }
-
     return schema;
   }
 
-  DatabaseMetaDataWrapper getDatabaseMetaData() {
+  Schema getSchema() {
+    return getSchema(false);
+  }
+
+  DatabaseMetaData getDatabaseMetaData() {
     return meta;
   }
 
@@ -254,69 +269,55 @@ class DatabaseConnection {
 
   /** Schema. */
   class Schema {
-    private List<Table> tables;
+    private Map<String, Map<String, Set<String>>> schema2tables;
 
-    List<Table> getTables() {
-      if (tables != null) {
-        return tables;
+    Map<String, Map<String, Set<String>>> getSchema2tables() {
+      if (schema2tables != null) {
+        return schema2tables;
       }
 
-      tables = new LinkedList<>();
+      schema2tables = new HashMap<>();
 
-      try {
-        ResultSet rs =
-            getDatabaseMetaData().getTables(getConnection().getCatalog(),
-                null, "%", new String[]{"TABLE"});
-        try {
-          while (rs.next()) {
-            tables.add(new Table(rs.getString("TABLE_NAME")));
-          }
-        } finally {
-          try {
-            rs.close();
-          } catch (Exception e) {
-            // ignore
-          }
+      try (ResultSet rs = getDatabaseMetaData()
+          .getTables(getConnection().getCatalog(),
+          null, "%", new String[] {"TABLE"})) {
+        while (rs.next()) {
+          final String tableSchema = rs.getString("TABLE_SCHEM");
+          schema2tables.computeIfAbsent(tableSchema, k -> new HashMap<>());
+          schema2tables.get(tableSchema).put(rs.getString("TABLE_NAME"), null);
         }
       } catch (Throwable t) {
         // ignore
       }
 
-      return tables;
+      return schema2tables;
     }
 
-    Table getTable(String name) {
-      for (Table table : getTables()) {
-        if (name.equalsIgnoreCase(table.getName())) {
-          return table;
+
+    Set<String> getColumnNames(String schemaName, String tableName) {
+      Map<String, Set<String>> table2Column = schema2tables.get(schemaName);
+      if (schemaName == null) {
+        schema2tables.putIfAbsent(null, new HashMap<>());
+        table2Column = schema2tables.get(null);
+      }
+      if (table2Column == null) {
+        return Collections.emptySet();
+      }
+      if (table2Column.get(tableName) != null) {
+        return table2Column.get(tableName);
+      }
+      try (ResultSet rs = getDatabaseMetaData().getColumns(
+          getConnection().getCatalog(), schemaName, tableName, "%")) {
+        table2Column.put(tableName, new HashSet<>());
+        while (rs.next()) {
+          final String columnName = rs.getString("COLUMN_NAME");
+          table2Column.get(tableName).add(columnName);
         }
+      } catch (Throwable t) {
+        // ignore
       }
-
-      return null;
-    }
-
-    /** Table. */
-    class Table {
-      final String name;
-      Column[] columns;
-
-      Table(String name) {
-        this.name = name;
-      }
-
-      public String getName() {
-        return name;
-      }
-
-      /** Column. */
-      class Column {
-        final String name;
-        boolean isPrimaryKey;
-
-        Column(String name) {
-          this.name = name;
-        }
-      }
+      table2Column.putIfAbsent(tableName, Collections.emptySet());
+      return table2Column.get(tableName);
     }
   }
 }

@@ -10,14 +10,14 @@
   <groupId>sqlline</groupId>
   <artifactId>sqlline</artifactId>
   <packaging>jar</packaging>
-  <version>1.8.0-SNAPSHOT</version>
+  <version>1.10.0-SNAPSHOT</version>
   <name>sqlline</name>
   <description>Shell for issuing SQL to relational databases via JDBC</description>
-  <url>http://github.com/julianhyde/sqlline</url>
+  <url>https://github.com/julianhyde/sqlline</url>
   <inceptionYear>2002</inceptionYear>
   <organization>
     <name>Julian Hyde</name>
-    <url>http://www.hydromatic.net</url>
+    <url>https://github.com/julianhyde</url>
   </organization>
 
   <properties>
@@ -25,33 +25,36 @@
     <top.dir>${project.basedir}</top.dir>
 
     <!-- The following list is sorted. -->
-    <checkstyle.version>8.18</checkstyle.version>
+    <checkstyle.version>8.23</checkstyle.version>
     <docbkx-maven-plugin.version>2.0.17</docbkx-maven-plugin.version>
     <forbiddenapis.version>2.6</forbiddenapis.version>
-    <h2.version>1.4.197</h2.version>
+    <h2.version>1.4.199</h2.version>
     <hamcrest.version>2.1</hamcrest.version>
-    <hsqldb.version>2.4.1</hsqldb.version>
-    <jline.version>3.10.0</jline.version>
-    <jmockit.version>1.44</jmockit.version>
-    <junit.version>5.3.2</junit.version>
+    <hsqldb.version>2.5.0</hsqldb.version>
+    <jline.version>3.12.1</jline.version>
+    <jmockit.version>1.48</jmockit.version>
+    <junit.version>5.5.1</junit.version>
     <maven-assembly-plugin.version>3.1.1</maven-assembly-plugin.version>
-    <maven-checkstyle-plugin.version>3.0.0</maven-checkstyle-plugin.version>
+    <maven-checkstyle-plugin.version>3.1.0</maven-checkstyle-plugin.version>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
     <maven-dependency-plugin.version>3.1.1</maven-dependency-plugin.version>
     <maven-enforcer-plugin.version>3.0.0-M2</maven-enforcer-plugin.version>
-    <maven-jar-plugin.version>3.1.1</maven-jar-plugin.version>
+    <maven-jar-plugin.version>3.1.2</maven-jar-plugin.version>
     <maven-javadoc-plugin.version>3.0.1</maven-javadoc-plugin.version>
     <maven-javadoc-plugin.additionalOptions>-html5</maven-javadoc-plugin.additionalOptions>
     <maven-gpg-plugin.version>1.6</maven-gpg-plugin.version>
-    <maven-surefire-plugin.version>2.22.1</maven-surefire-plugin.version>
+    <maven-project-info-reports-plugin.version>3.0.0</maven-project-info-reports-plugin.version>
+    <maven-site-plugin.version>3.8.2</maven-site-plugin.version>
+    <maven-surefire-plugin.version>2.22.2</maven-surefire-plugin.version>
     <scott-data-hsqldb.version>0.1</scott-data-hsqldb.version>
+    <skip.docbkx>false</skip.docbkx>
   </properties>
 
   <licenses>
     <license>
       <name>Modified BSD License</name>
-      <url>http://opensource.org/licenses/BSD-3-Clause</url>
+      <url>https://opensource.org/licenses/BSD-3-Clause</url>
       <distribution>repo</distribution>
     </license>
   </licenses>
@@ -81,17 +84,17 @@
   <scm>
     <connection>scm:git:git://github.com/julianhyde/sqlline.git</connection>
     <developerConnection>scm:git:git@github.com:julianhyde/sqlline.git</developerConnection>
-    <url>http://github.com/julianhyde/sqlline/tree/master</url>
+    <url>https://github.com/julianhyde/sqlline/tree/master</url>
     <tag>HEAD</tag>
   </scm>
 
   <mailingLists>
     <mailingList>
       <name>sqlline-dev</name>
-      <archive>http://groups.google.com/group/sqlline-dev/topics</archive>
-      <subscribe>http://groups.google.com/group/sqlline-dev/subscribe</subscribe>
-      <unsubscribe>http://groups.google.com/group/sqlline-dev/subscribe</unsubscribe>
-      <post>http://groups.google.com/group/sqlline-dev/post</post>
+      <archive>https://groups.google.com/group/sqlline-dev/topics</archive>
+      <subscribe>https://groups.google.com/group/sqlline-dev/subscribe</subscribe>
+      <unsubscribe>https://groups.google.com/group/sqlline-dev/subscribe</unsubscribe>
+      <post>https://groups.google.com/group/sqlline-dev/post</post>
     </mailingList>
   </mailingLists>
 
@@ -150,6 +153,7 @@
             </entity>
           </entities>
           <includes>manual.xml</includes>
+          <skip>${skip.docbkx}</skip>
         </configuration>
       </plugin>
       <plugin>
@@ -171,9 +175,6 @@
           <signaturesFiles>
             <signaturesFile>${top.dir}/src/main/config/forbidden-apis/signatures.txt</signaturesFile>
           </signaturesFiles>
-          <excludes>
-            <exclude>**/sqlline/SunSignalHandler.class</exclude>
-          </excludes>
         </configuration>
         <executions>
           <execution>
@@ -266,6 +267,19 @@
             </goals>
           </execution>
         </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-project-info-reports-plugin</artifactId>
+        <version>${maven-project-info-reports-plugin.version}</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-release-plugin</artifactId>
+        <configuration>
+          <localCheckout>true</localCheckout>
+          <pushChanges>false</pushChanges>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -375,12 +389,17 @@
               <groupname>root</groupname>
               <sources>
                 <source>
-                  <location>target/sqlline-1.8.0-SNAPSHOT-jar-with-dependencies.jar</location>
+                  <location>target/sqlline-1.10.0-SNAPSHOT-jar-with-dependencies.jar</location>
                 </source>
               </sources>
             </mapping>
           </mappings>
         </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-site-plugin</artifactId>
+        <version>${maven-site-plugin.version}</version>
       </plugin>
     </plugins>
 

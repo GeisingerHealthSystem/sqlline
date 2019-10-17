@@ -4,7 +4,7 @@
 [
     <!-- "http://www.docbook.org/xml/4.2/docbookx.dtd" -->
     <!-- "file:/sw/share/xml/dtd/docbookx/4.2.0/docbookx.dtd" -->
-    <!ENTITY VERSION "1.7.0">
+    <!ENTITY VERSION "1.9.0">
 ]>
 <book>
   <bookinfo>
@@ -1440,6 +1440,12 @@ sqlline> !help
 !go               Select the current connection
 !help             Print a summary of command usage
 !history          Display the command history
+                  -d Print timestamps for each event (default for !history)
+                  -f Print full time date stamps in the US format
+                  -E Print full time date stamps in the European format
+                  -i Print full time date stamps in ISO8601 format
+                  -n Suppresses command numbers
+                  -r Reverses the order of the commands
 !importedkeys     List all the imported keys for the specified table
 !indexes          List all the indexes for the specified table
 !isolation        Set the transaction isolation for this connection
@@ -1447,7 +1453,7 @@ sqlline> !help
 !metadata         Obtain metadata information
 !nickname         Create a friendly name for the connection (updates command prompt)
 !outputformat     Set the output format for displaying results
-                  (table, vertical, csv, tsv, xmlattrs, xmlelements, json)
+                  (table, vertical, csv, tsv, xmlattrs, xmlelements, json, ansiconsole)
 !prompthandler    Set custom prompt handler class name
 !properties       Connect to the database specified in the properties file(s)
 !primarykeys      List all the primary keys for the specified table
@@ -1461,6 +1467,7 @@ sqlline> !help
 !run              Run a script from the specified file
 !save             Save the current variables and aliases
 !scan             Scan for installed JDBC drivers
+!schemas          List all the schemas in the database
 !script           Start saving a script to a file
 !set              Set a sqlline variable, or show its value
 !sql              Execute a SQL command
@@ -1519,6 +1526,12 @@ sqlline>
           <refname>history</refname>
           <refpurpose>
           Display the command history
+            -d Print timestamps for each event (default for !history)
+            -f Print full time date stamps in the US format
+            -E Print full time date stamps in the European format
+            -i Print full time date stamps in ISO8601 format
+            -n Suppresses command numbers
+            -r Reverses the order of the commands
           </refpurpose>
         </refnamediv>
 
@@ -1885,7 +1898,12 @@ true
           Set the mode for displaying results from statements.
           This is useful for saving output from SQL statements to
           either a visually pleasing format or an easily
-          parsable format.
+          parsable format. In the case of csv or table outputformat
+          there could be specified additional parameters like
+          csv delimiter, csv quote character, max column width.
+          Such settings will change corresponding properties'
+          values. If the parameters not specified then properties
+          are left as is.
           </para>
         </refsect1>
         <refsect1>
@@ -1940,9 +1958,7 @@ NAME        Microsoft
         <refsect1>
           <title>Example of CSV output formatting with different csv delimiter and quote character</title>
           <screen>
-0: jdbc:calcite:model=target/test-classes/mod> !set csvDelimiter ###
-0: jdbc:calcite:model=target/test-classes/mod> !set csvQuoteCharacter @
-0: jdbc:calcite:model=target/test-classes/mod> !set outputFormat csv
+0: jdbc:calcite:model=target/test-classes/mod> !set outputFormat csv ### @
 0: jdbc:calcite:model=target/test-classes/mod> SELECT * FROM COMPANY;
 @COMPANY_ID@###@NAME@
 @1@###@Apple@
@@ -2017,6 +2033,20 @@ NAME        Microsoft
 {"COMPANY_ID":3,"NAME":"IBM"},
 {"COMPANY_ID":4,"NAME":"Microsoft"}
 ]}
+4 rows selected (0.03 seconds)
+0: jdbc:calcite:model=target/test-classes/mod>
+          </screen>
+        </refsect1>
+        <refsect1>
+          <title>Example of AnsiConsole output formatting</title>
+          <screen>
+0: jdbc:calcite:model=target/test-classes/mod> !outputformat ansiconsole
+0: jdbc:calcite:model=target/test-classes/mod> SELECT * FROM COMPANY;
+COMPANY_ID NAME
+1          Apple
+2          Sun
+3          IBM
+4          Microsoft
 4 rows selected (0.03 seconds)
 0: jdbc:calcite:model=target/test-classes/mod>
           </screen>
@@ -2730,6 +2760,52 @@ sqlline>
       </refentry>
       </section>
 
+      <section id="sect_command_schemas">
+        <title>schemas</title>
+        <refentry id="command_schemas">
+          <refmeta>
+            <refentrytitle>schemas</refentrytitle>
+            <manvolnum>1</manvolnum>
+          </refmeta>
+
+
+          <refnamediv>
+            <refname>schemas</refname>
+            <refpurpose>
+              List all the schemas in the database
+            </refpurpose>
+          </refnamediv>
+
+          <refsynopsisdiv>
+            <cmdsynopsis>
+              <command>!schemas</command>
+            </cmdsynopsis>
+          </refsynopsisdiv>
+          <refsect1>
+            <title>Description</title>
+            <para>
+              List all the schemas in the database of the
+              current connection.
+            </para>
+          </refsect1>
+          <refsect1>
+            <title>Example of "schemas" command</title>
+            <screen>
+              0: jdbc:postgresql:thin:@localhost:5432:mydb> !schemas
+
+              +--------------------+---------------+
+              |    table_schem     | table_catalog |
+              +--------------------+---------------+
+              | information_schema |               |
+              | pg_catalog         |               |
+              | public             |               |
+              +--------------------+---------------+
+
+              0: jdbc:postgresql:thin:@localhost:5432:mydb>
+            </screen>
+          </refsect1>
+        </refentry>
+      </section>
       <section id="sect_command_script">
       <title>script</title>
       <refentry id="command_script">
@@ -3077,6 +3153,18 @@ java.sql.SQLException: ORA-00942: table or view does not exist
             If <literal>default</literal> then there is no syntax highlighting.
         </para>
       </sect1>
+      <sect1 id="setting_connectinteractionmode">
+        <title>connectinteractionmode</title>
+        <para>
+          If <literal>askCredentials</literal> then sqlline will ask for the
+          credentials if they are not specified as properties to make
+          a connection. If <literal>notAskCredentials</literal> the sqlline
+          will not ask for the credentials to make a connection. If
+          <literal>useNPTogetherOrEmpty</literal> then it will ask for the
+          credentials if there is only one specified, if there is no specified
+          then it will use empty credentials (sqlline 1.7 and earlier behavior).
+        </para>
+      </sect1>
       <sect1 id="setting_dateformat">
         <title>dateformat</title>
         <para>
@@ -3304,6 +3392,14 @@ java.sql.SQLException: ORA-00942: table or view does not exist
         <para>
           The maximum number of rows to fetch per query.
           Defaults to 0, which is interpreted as fetching all rows.
+        </para>
+      </sect1>
+      <sect1 id="setting_showcompletiondesc">
+        <title>showcompletiondesc</title>
+        <para>
+          If <literal>true</literal>, display help description for each
+          completion candidate. Defaults to
+          <literal>true</literal>.
         </para>
       </sect1>
       <sect1 id="setting_showheader">
