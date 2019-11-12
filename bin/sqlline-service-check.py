@@ -58,7 +58,9 @@ class Load(nagiosplugin.Resource):
             sys.exit("Invalid execution type specified")    
 
         # Execute sqlline
-        logging.debug("Execute sqlline")
+        logging.debug("Executing sqlline...")
+        logging.debug("Running command: /usr/local/bin/sqlline -u " + jdbc + " -f " \
+            + queryfile + " -n " + self.username + " -p <PASSWORD_FIELD_REDACTED> ")
         sqlline_cmd_stream = subprocess.Popen(["/usr/local/bin/sqlline", "-u", jdbc, "-f", \
             queryfile, "-n", self.username, "-p", self.PASSWORD], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
